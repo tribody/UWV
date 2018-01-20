@@ -1,0 +1,1 @@
+# Image_Stitchig_Effect_Plugin
