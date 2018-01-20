@@ -321,3 +321,5 @@ ASALocalRun/
 # MSBuild Binary and Structured Log
 *.binlog
 
+# our own ignore path
+third-party/
