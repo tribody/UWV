@@ -28,7 +28,11 @@ typedef enum {
 	//Import settings
 	StrID_Import,
 	StrID_Left,
+	StrID_Middle,
 	StrID_Right,
+	//
+	//
+	StrID_CorrectOrder,
 	//Presettings for the users
 	//the Lapped ratio for the left and right videos
 	StrID_Percentage,

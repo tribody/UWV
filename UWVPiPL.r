@@ -17,7 +17,7 @@ resource 'PiPL' (16000) {
 		},
 		/* [3] */
 		Category {
-			"Sample Plug-ins"
+			"3DStudio"
 		},
 #ifdef AE_OS_WIN
 	#ifdef AE_PROC_INTELx64
@@ -52,7 +52,7 @@ resource 'PiPL' (16000) {
 		},
 		/* [10] */
 		AE_Effect_Global_OutFlags {
-		0x06000600 //100663808
+		0x6008600 // ... + 2^15 (for PF_OutFlag_CUSTOM_UI)
 
 		},
 		AE_Effect_Global_OutFlags_2 {

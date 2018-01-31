@@ -48,6 +48,7 @@ typedef short int			int16;
 
 #include "entry.h"
 #include "AE_Effect.h"
+#include "AE_EffectUI.h"
 #include "AE_EffectCB.h"
 #include "AE_Macros.h"
 #include "Param_Utils.h"
@@ -59,6 +60,9 @@ typedef short int			int16;
 #include "AEGP_SuiteHandler.h"
 
 #include "mat.h"
+// #include <opencv2/opencv.hpp> //  π”√OpenCV
+// #include <opencv2/core/core.hpp>  
+// #include <opencv2/highgui/highgui.hpp> 
 
 #include "UWV_Strings.h"
 
@@ -149,7 +153,9 @@ enum {
 	UWV_INPUT = 0,
 	UWV_IMPORT_BEG,
 	UWV_IMPORT_LEFT,
+	UWV_IMPORT_MIDDLE,
 	UWV_IMPORT_RIGHT,
+	UWV_IMPORT_CORRECTORDER,
 	UWV_IMPORT_END,
 
 	UWV_PERCENTAGE_BEG,
@@ -176,9 +182,10 @@ enum {
 enum {
 	IMPORT_BEG_ID = 1,
 	LEFT_ID,
+	MIDDLE_ID,
 	RIGHT_ID,
+	CORRECTORDER_ID,
 	IMPORT_END_ID,
-
 	PERCENTAGE_BEG_ID,
 	RATIO_L_ID,
 	RATIO_R_ID,

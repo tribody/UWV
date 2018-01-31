@@ -37,35 +37,41 @@
 
 */
 
+#include <vector> // 标准库
 #include "UWV.h"
 
-// Original Image Formats
-PF_EffectWorld  *OrigL_E = NULL;
-PF_EffectWorld  *OrigM_E = NULL;
-PF_EffectWorld  *OrigR_E = NULL;
-
-PF_EffectWorld  *Final_E = NULL;
-
-PF_ParamDef leftbox, rightbox;
+A_long src_width, src_height, mesh_width, mesh_height; // 图片和网格大小信息
+PF_EffectWorld *srcL = NULL, *srcM = NULL, *srcR = NULL;
+PF_ParamDef leftbox, rightbox, middlebox;
 
 
 // I -- fundalmental matrix
 // Homo -- transform matrix
-PF_FloatMatrix *I_L2M, *I_R2M, *Homo_L2M, *Homo_R2M;
+PF_FloatMatrix *I_L2M = NULL, *I_R2M = NULL, *Homo_L2M = NULL, *Homo_R2M = NULL;
 
 // Processed Image Formats
-
 A_long width_output;
 A_long heigh_output;
 
-static float ratioL = UWV_RATIO_DFLT, ratioR = UWV_RATIO_DFLT, 
+static float ratioL = UWV_RATIO_DFLT,
+             ratioR = UWV_RATIO_DFLT, 
 			 focal_length = UWV_ESTIMATION_DFLT;
-static bool homo_flag = false,
-cal_success = false,
+
+static bool correct_order_flag = FALSE,
+            correcting_order_flag = FALSE,
+            homo_flag = false,
+            cal_success = false,
 			mosaic_flag = false;
 
-static int shiftL = UWV_FRAME_SHIFT_DFLT, shiftR = UWV_FRAME_SHIFT_DFLT,
+static int shiftL = UWV_FRAME_SHIFT_DFLT,
+           shiftR = UWV_FRAME_SHIFT_DFLT,
 		   proj_method = UWV_METHOD_DFLT;
+
+static int first_click_img;
+static int second_click_img;
+static std::vector<PF_EffectWorld **> imgs_prt{&srcL, &srcM, &srcR};
+static PF_EffectWorld *dest_back_layer;
+static bool ordering_done = false;
 
 static PF_Err 
 About (	
@@ -98,10 +104,12 @@ GlobalSetup (
 										STAGE_VERSION, 
 										BUILD_VERSION);
 
-	out_data->out_flags =  PF_OutFlag_DEEP_COLOR_AWARE	// just 16bpc, not 32bpc
-						   |	PF_OutFlag_PIX_INDEPENDENT	//pixel independent
-						   |	PF_OutFlag_I_EXPAND_BUFFER	// expand the output buffer
-						   |	PF_OutFlag_SEND_UPDATE_PARAMS_UI;	// set to receive PF_Cmd_UPDATE_PARAMS_UI
+	// Here bind PiPL.r tightly ...
+	out_data->out_flags =  PF_OutFlag_DEEP_COLOR_AWARE // just 16bpc, not 32bpc
+						   |	PF_OutFlag_PIX_INDEPENDENT //pixel independent
+						   |	PF_OutFlag_I_EXPAND_BUFFER // expand the output buffer
+						   |	PF_OutFlag_SEND_UPDATE_PARAMS_UI // set to receive PF_Cmd_UPDATE_PARAMS_UI
+		                   |    PF_OutFlag_CUSTOM_UI; // set to receive PF_Cmd_Event
 	
 	// honor the collapse ability of each parameters group
 	out_data->out_flags2 = PF_OutFlag2_PARAM_GROUP_START_COLLAPSED_FLAG;
@@ -320,14 +328,34 @@ ParamsSetup (
 
 	//Import
 	AEFX_CLR_STRUCT(def);
-	def.flags |= PF_ParamFlag_START_COLLAPSED;	// Controls the twirl-state of a topic spinner
+	def.flags = PF_ParamFlag_START_COLLAPSED; // Controls the twirl-state of a topic spinner
 	PF_ADD_TOPIC(STR(StrID_Import), IMPORT_BEG_ID);
 
 	AEFX_CLR_STRUCT(def);
+	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
+		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
+		| PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_LAYER(STR(StrID_Left), -1, LEFT_ID);
 
 	AEFX_CLR_STRUCT(def);
+	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
+		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
+		| PF_ParamFlag_START_COLLAPSED;
+	PF_ADD_LAYER(STR(StrID_Middle), -1, MIDDLE_ID);
+
+	AEFX_CLR_STRUCT(def);
+	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
+		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
+		| PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_LAYER(STR(StrID_Right), -1, RIGHT_ID);
+
+	// Correct image order manually
+	AEFX_CLR_STRUCT(def);
+	PF_ADD_CHECKBOX(STR(StrID_CorrectOrder),
+		"Adjust",
+		FALSE,
+		0,
+		CORRECTORDER_ID);
 
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(IMPORT_END_ID);
@@ -339,7 +367,7 @@ ParamsSetup (
 
 	AEFX_CLR_STRUCT(def);
 	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
-		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time
+		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
 		| PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_SLIDER(STR(StrID_Ratio_Left),
 		UWV_RATIO_MIN,
@@ -435,6 +463,33 @@ ParamsSetup (
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(STITCH_END_ID);
 
+	// 添加UI事件捕捉层？？？
+	if (!err)
+	{
+		PF_CustomUIInfo			ci;
+
+		AEFX_CLR_STRUCT(ci);
+
+		ci.events = PF_CustomEFlag_LAYER |
+			PF_CustomEFlag_COMP;
+		ci.comp_ui_width =
+			ci.comp_ui_height = 0;
+
+		ci.comp_ui_alignment = PF_UIAlignment_NONE;
+
+		ci.layer_ui_width =
+			ci.layer_ui_height = 0;
+
+		ci.layer_ui_alignment = PF_UIAlignment_NONE;
+
+		ci.preview_ui_width =
+			ci.preview_ui_height = 0;
+
+		ci.layer_ui_alignment = PF_UIAlignment_NONE;
+
+		err = (*(in_data->inter.register_ui))(in_data->effect_ref, &ci);
+	}
+
 
 	out_data->num_params = UWV_NUM_PARAMS;
 
@@ -506,7 +561,9 @@ MakeParamCopy(
 	copy[UWV_INPUT]			= *actual[UWV_INPUT];
 	copy[IMPORT_BEG_ID]		= *actual[IMPORT_BEG_ID];
 	copy[UWV_IMPORT_LEFT]	= *actual[UWV_IMPORT_LEFT];
+	copy[UWV_IMPORT_MIDDLE] = *actual[UWV_IMPORT_MIDDLE];
 	copy[UWV_IMPORT_RIGHT]	= *actual[UWV_IMPORT_RIGHT];
+	copy[UWV_IMPORT_CORRECTORDER]  = *actual[UWV_IMPORT_CORRECTORDER];
 
 	copy[PERCENTAGE_BEG_ID] = *actual[PERCENTAGE_BEG_ID];
 	copy[UWV_RATIO_L] = *actual[UWV_RATIO_L];
@@ -533,7 +590,18 @@ UserChangedParam(
 	const PF_UserChangedParamExtra	*which_hitP)
 {
 	PF_Err err = PF_Err_NONE;
+
 	switch (which_hitP->param_index) {
+
+	case UWV_IMPORT_CORRECTORDER:
+		correct_order_flag = params[UWV_IMPORT_CORRECTORDER]->u.bd.value;
+		if (correct_order_flag == FALSE) {
+			correcting_order_flag = FALSE;
+			ordering_done = false;
+		}
+		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
+		break;
+
 	case UWV_RATIO_L:
 		ratioL = params[UWV_RATIO_L]->u.sd.value / 100.f;
 		break;
@@ -647,75 +715,120 @@ Render (
 	PF_ParamDef		*params[],
 	PF_LayerDef		*output )
 {
-	PF_Err				err		= PF_Err_NONE;
+	PF_Err err = PF_Err_NONE;
+
+	// 渲染输出时，在此传入当前帧
+	PF_EffectWorld	*pure_color_layer = &params[UWV_INPUT]->u.ld; // 流程：把别的素材的当前帧当作参数（处理后）写到output上，
+
+	// 读取当前将要处理的帧
+	// 因此，鼠标调节已经不可用，因为每次rerender会重新checkout，覆盖掉指针调整
 	AEGP_SuiteHandler suites(in_data->pica_basicP);
-
-	PF_EffectWorld *srcM = &params[UWV_INPUT]->u.ld;
-
 	PF_WorldSuite2 *wsP = NULL;
 	PF_PixelFormat format;
-
-
 	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
-	ERR(wsP->PF_GetPixelFormat(srcM, &format));
+	{
+		// create L Mand R layer
+		// get the left image
+		PF_CHECKOUT_PARAM(in_data,
+			UWV_IMPORT_LEFT,
+			(in_data->current_time + shiftL * in_data->time_step),//+ff_left*in_data->time_step, 
+			in_data->time_step,
+			in_data->time_scale,
+			&leftbox);
+		ERR(wsP->PF_GetPixelFormat((&leftbox.u.ld), &format));
+		srcL = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (&leftbox.u.ld)->width, (&leftbox.u.ld)->height, 1, format, srcL));
+		PF_COPY(&leftbox.u.ld,
+			srcL,
+			NULL,
+			NULL);
+		// 预览图各子图的大小
+		src_width = (&leftbox.u.ld)->width;
+		src_height = (&leftbox.u.ld)->height;
+		PF_CHECKIN_PARAM(in_data, &leftbox);
 
-	// create L and R layer
-	PF_EffectWorld	*srcL = new  PF_EffectWorld;
-	ERR(wsP->PF_NewWorld(in_data->effect_ref, srcM->width, srcM->height, 1, format, srcL));
-	PF_EffectWorld	*srcR = new  PF_EffectWorld;
-	ERR(wsP->PF_NewWorld(in_data->effect_ref, srcM->width, srcM->height, 1, format, srcR));
-	
-	// get the left image
-	PF_CHECKOUT_PARAM(in_data,
-		UWV_IMPORT_LEFT,
-		(in_data->current_time + shiftL * in_data->time_step),//+ff_left*in_data->time_step, 
-		in_data->time_step,
-		in_data->time_scale,
-		&leftbox);
-	PF_COPY(&leftbox.u.ld,
-		srcL,
-		NULL,
-		NULL);
-	PF_CHECKIN_PARAM(in_data, &leftbox);
+		// get the middle image
+		PF_CHECKOUT_PARAM(in_data,
+			UWV_IMPORT_MIDDLE,
+			(in_data->current_time + shiftL * in_data->time_step),//+ff_left*in_data->time_step, 
+			in_data->time_step,
+			in_data->time_scale,
+			&middlebox);
+		ERR(wsP->PF_GetPixelFormat((&middlebox.u.ld), &format));
+		srcM = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (&middlebox.u.ld)->width, (&middlebox.u.ld)->height, 1, format, srcM));
+		PF_COPY(&middlebox.u.ld,
+			srcM,
+			NULL,
+			NULL);
+		src_width = (&middlebox.u.ld)->width;
+		src_height = (&middlebox.u.ld)->height;
+		PF_CHECKIN_PARAM(in_data, &middlebox);
 
-	// get the right image
-	PF_CHECKOUT_PARAM(in_data,
-		UWV_IMPORT_RIGHT,
-		(in_data->current_time + shiftR * in_data->time_step),//+ff_right*in_data->time_step, 
-		in_data->time_step,
-		in_data->time_scale,
-		&rightbox);
-	PF_COPY(&rightbox.u.ld,
-		srcR,
-		NULL,
-		NULL);
-	PF_CHECKIN_PARAM(in_data, &rightbox);
+		// get the right image
+		PF_CHECKOUT_PARAM(in_data,
+			UWV_IMPORT_RIGHT,
+			(in_data->current_time + shiftR * in_data->time_step),//+ff_right*in_data->time_step, 
+			in_data->time_step,
+			in_data->time_scale,
+			&rightbox);
+		ERR(wsP->PF_GetPixelFormat((&rightbox.u.ld), &format));
+		srcR = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (&rightbox.u.ld)->width, (&rightbox.u.ld)->height, 1, format, srcR));
+		PF_COPY(&rightbox.u.ld,
+			srcR,
+			NULL,
+			NULL);
+		// 预览图各子图的大小
+		src_width = (&rightbox.u.ld)->width;
+		src_height = (&rightbox.u.ld)->height;
+		PF_CHECKIN_PARAM(in_data, &rightbox);
+	}
 
-	Mat32f matM(srcM->width, srcM->height, 4);
-	Mat32f matL(srcL->width, srcL->height, 4);
-	Mat32f matR(srcR->width, srcR->height, 4);
 
-	ERR(EwToMat(in_data, srcM, matM));
-	ERR(EwToMat(in_data, srcL, matL));
-	ERR(EwToMat(in_data, srcR, matR));
+	if (ordering_done) {
+		// 拼合当前预览/输出图
+		out_data->width = (in_data->width) / 4;
+		out_data->height = in_data->height / 4;
+		mesh_width = (output->width) / 3; // 拼接的view的数目
+		mesh_height = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
+		PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+		PF_COPY(srcL, output, NULL, &destArea);
+		PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+		PF_COPY(srcM, output, NULL, &destArea1);
+		PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+		PF_COPY(srcR, output, NULL, &destArea2);
+		ordering_done = false; // 将调序后的输出渲染完，重置
+	}
 
 	/*
 	 * TODO
+	 * 0、点击交换图片在纯色图层的位置：偶次、异图 点击
 	 * 1、参数预设
 	 * 2、参数更新
 	 * 3、图像拼接
 	 */
 
-	if (proj_method == 1) {	// 1 means default project method planar
+
+	if (proj_method == 1) {	// 1 means default project method PLANAR
 		// initial the planar stitcher
 
-	} else {	// project method cylinder
+	} else {	// project method CYLINDER
 		// initial the cylinder stitcher
-
 	}
 
 	// do the h calculation
 	if (homo_flag) {
+		// 计算单应前，在此作数据转换
+		Mat32f matOutput(output->width, output->height, 4);
+		Mat32f matM(srcM->width, srcM->height, 4);
+		Mat32f matL(srcL->width, srcL->height, 4);
+		Mat32f matR(srcR->width, srcR->height, 4);
+
+		ERR(EwToMat(in_data, output, matOutput));
+		ERR(EwToMat(in_data, srcM, matM));
+		ERR(EwToMat(in_data, srcL, matL));
+		ERR(EwToMat(in_data, srcR, matR));
 		//cal_success = CalHomoInKeyFrame(matL, matM, matR);
 		if (cal_success) {
 			PF_STRCPY(out_data->return_msg, "H matrix calculation finished!");
@@ -730,15 +843,73 @@ Render (
 	// do the stitch work
 	if (mosaic_flag) {
 		
-		
 	}
 
 
 	return err;
 }
 
-DllExport	
-PF_Err 
+static PF_Err
+AdjustOrder(
+	PF_InData		*in_data,
+	PF_OutData		*out_data,
+	PF_ParamDef		*params[],
+	PF_LayerDef		*output,
+	PF_EventExtra	*event_P)
+{
+	PF_Err		err = PF_Err_NONE;
+
+	A_long mesh_width_click = (in_data->width) / 12; // 缩放以后的合成的width，再除以3得到缩放后网格的大小，用于捕捉鼠标事件
+
+	if (correct_order_flag) {
+		if ((event_P->e_type == PF_Event_DO_CLICK)){
+			PF_Point mouse_downPt = {0, 0}, cornersPtA[4];
+			PF_FixedPoint mouse_layerFiPt = {0, 0};
+			mouse_downPt = *(reinterpret_cast<PF_Point*>(&event_P->u.do_click.screen_point));
+			//event_P->cbs.frame_to_source(event_P->cbs.refcon, event_P->contextH, &mouse_layerFiPt);
+
+			if (correcting_order_flag) {
+				//第二次，点击第二张图片
+				second_click_img = (mouse_downPt.h) / mesh_width_click;
+
+				//交换两次点击图片的指针
+				PF_EffectWorld * tmp = *(imgs_prt[first_click_img]);
+				*(imgs_prt[first_click_img]) = *(imgs_prt[second_click_img]);
+				*(imgs_prt[second_click_img]) = tmp;
+				
+				/* //拼合当前预览图，但是不作任何渲染，在Cmd_EVENT中输入（正常认为的当前图层，实际上不是）也没法操作
+				PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+				PF_COPY(srcL, dest_back_layer, NULL, &destArea);
+				PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+				PF_COPY(srcM, dest_back_layer, NULL, &destArea1);
+				PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+				PF_COPY(srcR, dest_back_layer, NULL, &destArea2);
+				*/
+
+				event_P->evt_out_flags = PF_EO_HANDLED_EVENT;
+				out_data->out_flags |= PF_OutFlag_FORCE_RERENDER; // 使强制马上渲染，具体触发未知
+				ordering_done = true;
+
+				//为下次调整做准备
+				first_click_img = 0;
+				second_click_img = 0;
+				correcting_order_flag = FALSE;
+			}
+			else
+			{
+				//第一次，点击第一张图片
+				first_click_img = (mouse_downPt.h)/ mesh_width_click;
+
+				//为第二次点击做准备
+				correcting_order_flag = TRUE;
+			}
+		}
+	}
+
+	return err;
+}
+
+PF_Err DllExport
 EntryPointFunc (
 	PF_Cmd			cmd,
 	PF_InData		*in_data,
@@ -792,7 +963,7 @@ EntryPointFunc (
 					reinterpret_cast<const PF_UserChangedParamExtra *>(extra));
 				break;
 				
-			case PF_Cmd_RENDER:
+			case PF_Cmd_RENDER: // 注：取帧必须要在这里做，否则渲染的时候没法一直是最新帧
 
 				err = Render(	in_data,
 								out_data,
@@ -808,7 +979,13 @@ EntryPointFunc (
 										output);
 				break;
 
-			default:
+			case PF_Cmd_EVENT:
+
+				err = AdjustOrder(	in_data,
+									out_data,
+									params,
+									output,
+									reinterpret_cast<PF_EventExtra*>(extra));
 				break;
 		}
 	}

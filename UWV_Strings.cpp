@@ -36,7 +36,9 @@ TableString		g_strs[StrID_NUMTYPES] = {
 	//Import settings
 	StrID_Import,					"Import Videos",
 	StrID_Left,						"Choose the Left Video",
+	StrID_Middle,					"Choose the Middle Video",
 	StrID_Right,					"Choose the Right Video",
+	StrID_CorrectOrder,             "Click to correct image order manually",
 	//Presettings for the users
 	//the Lapped ratio for the left and right videos
 	StrID_Percentage,				"the Percentage of ROI",

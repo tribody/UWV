@@ -81,9 +81,6 @@
     <ClInclude Include="..\..\..\Util\String_Utils.h">
       <Filter>Headers\AE</Filter>
     </ClInclude>
-    <ClInclude Include="..\stitch\mat.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\Util\AEGP_SuiteHandler.cpp">
