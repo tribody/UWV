@@ -42,8 +42,6 @@
 
 A_long src_width, src_height, mesh_width, mesh_height; // 图片和网格大小信息
 PF_EffectWorld *srcL = NULL, *srcM = NULL, *srcR = NULL;
-PF_ParamDef leftbox, rightbox, middlebox;
-
 
 // I -- fundalmental matrix
 // Homo -- transform matrix
@@ -53,9 +51,11 @@ PF_FloatMatrix *I_L2M = NULL, *I_R2M = NULL, *Homo_L2M = NULL, *Homo_R2M = NULL;
 A_long width_output;
 A_long heigh_output;
 
-static float ratioL = UWV_RATIO_DFLT,
-             ratioR = UWV_RATIO_DFLT, 
-			 focal_length = UWV_ESTIMATION_DFLT;
+// add by chromiumikx
+PF_ParamDef checkout;
+std::vector<PF_EffectWorld *>src_imgs{ 12, NULL };
+
+static float focal_length = UWV_ESTIMATION_DFLT;
 
 static bool correct_order_flag = FALSE,
             correcting_order_flag = FALSE,
@@ -63,15 +63,16 @@ static bool correct_order_flag = FALSE,
             cal_success = false,
 			mosaic_flag = false;
 
-static int shiftL = UWV_FRAME_SHIFT_DFLT,
-           shiftR = UWV_FRAME_SHIFT_DFLT,
-		   proj_method = UWV_METHOD_DFLT;
+static int proj_method = UWV_METHOD_DFLT;
 
+// add by chromiumikx
 static int first_click_img;
 static int second_click_img;
 static std::vector<PF_EffectWorld **> imgs_prt{&srcL, &srcM, &srcR};
 static PF_EffectWorld *dest_back_layer;
 static bool ordering_done = false;
+static std::vector<float> lapped_ratios{ 12, UWV_RATIO_DFLT };
+static std::vector<int> frame_shifts{ 12, UWV_FRAME_SHIFT_DFLT };
 
 static PF_Err 
 About (	
@@ -326,91 +327,61 @@ ParamsSetup (
 	PF_Err		err		= PF_Err_NONE;
 	PF_ParamDef	def;	
 
-	//Import
+	/* Import */
 	AEFX_CLR_STRUCT(def);
 	def.flags = PF_ParamFlag_START_COLLAPSED; // Controls the twirl-state of a topic spinner
 	PF_ADD_TOPIC(STR(StrID_Import), IMPORT_BEG_ID);
-
-	AEFX_CLR_STRUCT(def);
-	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
-		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
-		| PF_ParamFlag_START_COLLAPSED;
-	PF_ADD_LAYER(STR(StrID_Left), -1, LEFT_ID);
-
-	AEFX_CLR_STRUCT(def);
-	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
-		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
-		| PF_ParamFlag_START_COLLAPSED;
-	PF_ADD_LAYER(STR(StrID_Middle), -1, MIDDLE_ID);
-
-	AEFX_CLR_STRUCT(def);
-	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
-		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
-		| PF_ParamFlag_START_COLLAPSED;
-	PF_ADD_LAYER(STR(StrID_Right), -1, RIGHT_ID);
-
+	// ID和StrID位置相差2: ID + 2 = StrID
+	int i;
+	for (i = 0; i < 12; i++) {
+		AEFX_CLR_STRUCT(def);
+		def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
+			| PF_ParamFlag_CANNOT_TIME_VARY; // do not vary with time, otherwise will be changed after first applied
+		PF_ADD_LAYER(STR(i+UWV_IMPORT_VIEW_1_ID+2), -1, i+ UWV_IMPORT_VIEW_1_ID);
+	}
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(IMPORT_END_ID);
 
-	//Lapped percentage
+	/* Lapped percentage */
 	AEFX_CLR_STRUCT(def);
 	def.flags |= PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_TOPIC(STR(StrID_Percentage), PERCENTAGE_BEG_ID);
-
-	AEFX_CLR_STRUCT(def);
-	def.flags = PF_ParamFlag_SUPERVISE	// set to receive PF_Cmd_USER_CHANGED_PARAM
-		| PF_ParamFlag_CANNOT_TIME_VARY	// do not vary with time, otherwise will be changed after first applied
-		| PF_ParamFlag_START_COLLAPSED;
-	PF_ADD_SLIDER(STR(StrID_Ratio_Left),
-		UWV_RATIO_MIN,
-		UWV_RATIO_MAX,
-		UWV_RATIO_MIN,
-		UWV_RATIO_MAX,
-		UWV_RATIO_DFLT,
-		RATIO_L_ID);
-
-	AEFX_CLR_STRUCT(def);
-	def.flags = PF_ParamFlag_SUPERVISE
-		| PF_ParamFlag_CANNOT_TIME_VARY
-		| PF_ParamFlag_START_COLLAPSED;
-	PF_ADD_SLIDER(STR(StrID_Ratio_Right),
-		UWV_RATIO_MIN,
-		UWV_RATIO_MAX,
-		UWV_RATIO_MIN,
-		UWV_RATIO_MAX,
-		UWV_RATIO_DFLT,
-		RATIO_R_ID);
-
+	for (i = 0; i < 12; i++) {
+		AEFX_CLR_STRUCT(def);
+		def.flags = PF_ParamFlag_SUPERVISE
+			| PF_ParamFlag_CANNOT_TIME_VARY
+			| PF_ParamFlag_START_COLLAPSED;
+		PF_ADD_SLIDER(STR(i + UWV_PERCENTAGE_RATIO_1_ID + 2),
+			UWV_RATIO_MIN,
+			UWV_RATIO_MAX,
+			UWV_RATIO_MIN,
+			UWV_RATIO_MAX,
+			UWV_RATIO_DFLT,
+			i + UWV_PERCENTAGE_RATIO_1_ID);
+	}
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(PERCENTAGE_END_ID);
 
-	//Frame shift
+	/* Frame shift */
 	AEFX_CLR_STRUCT(def);
 	def.flags |= PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_TOPIC(STR(StrID_Frame_Shift), FRAME_SHIFT_BEG_ID);
-
-	AEFX_CLR_STRUCT(def);
-	PF_ADD_SLIDER(STR(StrID_Frame_Shift_Left),
-		UWV_FRAME_SHIFT_MIN,
-		UWV_FRAME_SHIFT_MAX,
-		UWV_FRAME_SHIFT_MIN,
-		UWV_FRAME_SHIFT_MAX,
-		UWV_FRAME_SHIFT_DFLT,
-		SHIFT_L_ID);
-
-	AEFX_CLR_STRUCT(def);
-	PF_ADD_SLIDER(STR(StrID_Frame_Shift_Right),
-		UWV_FRAME_SHIFT_MIN,
-		UWV_FRAME_SHIFT_MAX,
-		UWV_FRAME_SHIFT_MIN,
-		UWV_FRAME_SHIFT_MAX,
-		UWV_FRAME_SHIFT_DFLT,
-		SHIFT_R_ID);
-
+	for (i = 0; i < 12; i++) {
+		AEFX_CLR_STRUCT(def);
+		def.flags = PF_ParamFlag_SUPERVISE
+			| PF_ParamFlag_CANNOT_TIME_VARY;
+		PF_ADD_SLIDER(STR(i + UWV_FRAME_SHIFT_1_ID + 2),
+			UWV_FRAME_SHIFT_MIN,
+			UWV_FRAME_SHIFT_MAX,
+			UWV_FRAME_SHIFT_MIN,
+			UWV_FRAME_SHIFT_MAX,
+			UWV_FRAME_SHIFT_DFLT, // DFLT: 默认值
+			i + UWV_FRAME_SHIFT_1_ID);
+	}
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(FRAME_SHIFT_END_ID);
 
-	//SETTING
+	/* SETTING stitching */
 	AEFX_CLR_STRUCT(def);
 	def.flags |= PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_TOPIC(STR(StrID_UWV), STITCH_BEG_ID);
@@ -455,7 +426,7 @@ ParamsSetup (
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(STITCH_END_ID);
 
-	// 添加UI事件捕捉层，不使用
+	/* 添加UI事件捕捉层，不使用 */
 	if (!err)
 	{
 		PF_CustomUIInfo			ci;
@@ -502,46 +473,6 @@ FrameSetup(
 	return err;
 }
 
-static PF_Err EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
-	int w = imgE->width,
-		h = imgE->height,
-		rb = imgE->rowbytes;
-
-	PF_Pixel8 *pixelP = NULL;
-	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
-
-	for (int y = 0; y < h; y++) {
-		for (int x = 0; x < w; x++) {
-			imgMat.at(x, y, 0) = pixelP[x].blue;
-			imgMat.at(x, y, 1) = pixelP[x].green;
-			imgMat.at(x, y, 2) = pixelP[x].red;
-			imgMat.at(x, y, 3) = pixelP[x].alpha;
-		}
-		pixelP = (PF_Pixel8*)((char*)pixelP + rb); //Move to the next line
-	}
-	return PF_Err_NONE;
-}
-
-static PF_Err MatToEw(PF_InData *in_data, Mat32f &imgMat, PF_EffectWorld *imgE) {
-	int w = imgMat.cols(),
-		h = imgMat.rows(),
-		rb = imgE->rowbytes;
-
-	PF_Pixel8 *pixelP = NULL;
-	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
-
-	for (int y = 0; y < h; y++) {
-		for (int x = 0; x < w; x++) {
-			pixelP[x].blue = imgMat.at(x, y, 0);
-			pixelP[x].green = imgMat.at(x, y, 1);
-			pixelP[x].red = imgMat.at(x, y, 2);
-			pixelP[x].alpha = imgMat.at(x, y, 3);
-		}
-		pixelP = (PF_Pixel8*)((char*)pixelP + rb);
-	}
-	return PF_Err_NONE;
-}
-
 static PF_Err
 MakeParamCopy(
 	PF_ParamDef *actual[],	/* >> */
@@ -551,19 +482,22 @@ MakeParamCopy(
 		AEFX_CLR_STRUCT(copy[iS]);	// clean params are important!
 	}
 	copy[UWV_INPUT]			= *actual[UWV_INPUT];
-	copy[IMPORT_BEG_ID]		= *actual[IMPORT_BEG_ID];
-	copy[UWV_IMPORT_LEFT]	= *actual[UWV_IMPORT_LEFT];
-	copy[UWV_IMPORT_MIDDLE] = *actual[UWV_IMPORT_MIDDLE];
-	copy[UWV_IMPORT_RIGHT]	= *actual[UWV_IMPORT_RIGHT];
+	copy[UWV_IMPORT_BEG]	= *actual[IMPORT_BEG_ID];
+	int i;
+	for (i = 0; i < 12; i++) {
+		copy[i+ UWV_IMPORT_VIEW_1] = *actual[i+ UWV_IMPORT_VIEW_1];
+	}
 	// copy[UWV_IMPORT_CORRECTORDER]  = *actual[UWV_IMPORT_CORRECTORDER];
 
 	copy[PERCENTAGE_BEG_ID] = *actual[PERCENTAGE_BEG_ID];
-	copy[UWV_RATIO_L] = *actual[UWV_RATIO_L];
-	copy[UWV_RATIO_R] = *actual[UWV_RATIO_R];
+	for (i = 0; i < 12; i++) {
+		copy[i + UWV_PERCENTAGE_RATIO_1] = *actual[i + UWV_PERCENTAGE_RATIO_1];
+	}
 
 	copy[FRAME_SHIFT_BEG_ID] = *actual[FRAME_SHIFT_BEG_ID];
-	copy[UWV_SHIFT_L] = *actual[UWV_SHIFT_L];
-	copy[UWV_SHIFT_R] = *actual[UWV_SHIFT_R];
+	for (i = 0; i < 12; i++) {
+		copy[i + UWV_FRAME_SHIFT_1] = *actual[i + UWV_FRAME_SHIFT_1];
+	}
 
 	copy[STITCH_BEG_ID] = *actual[STITCH_BEG_ID];
 	copy[UWV_PROJECTION_METHOD] = *actual[UWV_PROJECTION_METHOD];
@@ -585,20 +519,49 @@ UserChangedParam(
 
 	switch (which_hitP->param_index) {
 
-	case UWV_RATIO_L:
-		ratioL = params[UWV_RATIO_L]->u.sd.value / 100.f;
-		break;
-	
-	case UWV_RATIO_R:
-		ratioR = params[UWV_RATIO_R]->u.sd.value / 100.f;
+	case UWV_IMPORT_VIEW_1 + 0:
+	case UWV_IMPORT_VIEW_1 + 1:
+	case UWV_IMPORT_VIEW_1 + 2:
+	case UWV_IMPORT_VIEW_1 + 3:
+	case UWV_IMPORT_VIEW_1 + 4:
+	case UWV_IMPORT_VIEW_1 + 5:
+	case UWV_IMPORT_VIEW_1 + 6:
+	case UWV_IMPORT_VIEW_1 + 7:
+	case UWV_IMPORT_VIEW_1 + 8:
+	case UWV_IMPORT_VIEW_1 + 9:
+	case UWV_IMPORT_VIEW_1 + 10:
+	case UWV_IMPORT_VIEW_1 + 11:
+		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER; // 每次导入图片都重新渲染
 		break;
 
-	case UWV_SHIFT_L:
-		shiftL = params[UWV_SHIFT_L]->u.sd.value;
+	case UWV_PERCENTAGE_RATIO_1 + 0:
+	case UWV_PERCENTAGE_RATIO_1 + 1:
+	case UWV_PERCENTAGE_RATIO_1 + 2:
+	case UWV_PERCENTAGE_RATIO_1 + 3:
+	case UWV_PERCENTAGE_RATIO_1 + 4:
+	case UWV_PERCENTAGE_RATIO_1 + 5:
+	case UWV_PERCENTAGE_RATIO_1 + 6:
+	case UWV_PERCENTAGE_RATIO_1 + 7:
+	case UWV_PERCENTAGE_RATIO_1 + 8:
+	case UWV_PERCENTAGE_RATIO_1 + 9:
+	case UWV_PERCENTAGE_RATIO_1 + 10:
+	case UWV_PERCENTAGE_RATIO_1 + 11:
+		lapped_ratios[which_hitP->param_index] = params[which_hitP->param_index]->u.sd.value / 100.f;
 		break;
 
-	case UWV_SHIFT_R:
-		shiftR = params[UWV_SHIFT_R]->u.sd.value;
+	case UWV_FRAME_SHIFT_1 + 0:
+	case UWV_FRAME_SHIFT_1 + 1:
+	case UWV_FRAME_SHIFT_1 + 2:
+	case UWV_FRAME_SHIFT_1 + 3:
+	case UWV_FRAME_SHIFT_1 + 4:
+	case UWV_FRAME_SHIFT_1 + 5:
+	case UWV_FRAME_SHIFT_1 + 6:
+	case UWV_FRAME_SHIFT_1 + 7:
+	case UWV_FRAME_SHIFT_1 + 8:
+	case UWV_FRAME_SHIFT_1 + 9:
+	case UWV_FRAME_SHIFT_1 + 10:
+	case UWV_FRAME_SHIFT_1 + 11:
+		frame_shifts[which_hitP->param_index] = params[which_hitP->param_index]->u.sd.value;
 		break;
 
 	case UWV_PROJECTION_METHOD:
@@ -644,10 +607,12 @@ UpdateParameterUI(
 		param_copy[PERCENTAGE_BEG_ID].flags		&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		param_copy[FRAME_SHIFT_BEG_ID].flags	&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		param_copy[STITCH_BEG_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-		param_copy[RATIO_L_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-		param_copy[RATIO_R_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-		param_copy[SHIFT_L_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-		param_copy[SHIFT_R_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
+
+		int i;
+		for (i = 0; i < 12; i++) {
+			param_copy[UWV_PERCENTAGE_RATIO_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
+			param_copy[UWV_FRAME_SHIFT_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
+		}
 
 		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
 			IMPORT_BEG_ID,
@@ -661,18 +626,15 @@ UpdateParameterUI(
 		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
 			STITCH_BEG_ID,
 			&param_copy[STITCH_BEG_ID]));
-		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
-			RATIO_L_ID,
-			&param_copy[RATIO_L_ID]));
-		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
-			RATIO_R_ID,
-			&param_copy[RATIO_R_ID]));
-		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
-			SHIFT_L_ID,
-			&param_copy[SHIFT_L_ID]));
-		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
-			SHIFT_R_ID,
-			&param_copy[SHIFT_R_ID]));
+		
+		for (i = 0; i < 12; i++) {
+			ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
+				UWV_PERCENTAGE_RATIO_1_ID,
+				&param_copy[UWV_PERCENTAGE_RATIO_1_ID]));
+			ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
+				UWV_FRAME_SHIFT_1_ID,
+				&param_copy[UWV_FRAME_SHIFT_1_ID]));
+		}
 	}
 
 	if (!err && params[UWV_PROJECTION_METHOD]->u.pd.value == 2) {
@@ -689,6 +651,48 @@ UpdateParameterUI(
 	}
 	
 return		err;
+}
+
+static PF_Err
+EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
+	int w = imgE->width,
+		h = imgE->height,
+		rb = imgE->rowbytes;
+
+	PF_Pixel8 *pixelP = NULL;
+	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
+
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			imgMat.at(x, y, 0) = pixelP[x].blue;
+			imgMat.at(x, y, 1) = pixelP[x].green;
+			imgMat.at(x, y, 2) = pixelP[x].red;
+			imgMat.at(x, y, 3) = pixelP[x].alpha;
+		}
+		pixelP = (PF_Pixel8*)((char*)pixelP + rb); //Move to the next line
+	}
+	return PF_Err_NONE;
+}
+
+static PF_Err
+MatToEw(PF_InData *in_data, Mat32f &imgMat, PF_EffectWorld *imgE) {
+	int w = imgMat.cols(),
+		h = imgMat.rows(),
+		rb = imgE->rowbytes;
+
+	PF_Pixel8 *pixelP = NULL;
+	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
+
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			pixelP[x].blue = imgMat.at(x, y, 0);
+			pixelP[x].green = imgMat.at(x, y, 1);
+			pixelP[x].red = imgMat.at(x, y, 2);
+			pixelP[x].alpha = imgMat.at(x, y, 3);
+		}
+		pixelP = (PF_Pixel8*)((char*)pixelP + rb);
+	}
+	return PF_Err_NONE;
 }
 
 static PF_Err 
@@ -710,76 +714,43 @@ Render (
 	PF_PixelFormat format;
 	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
 	{
-		// create L Mand R layer
-		// get the left image
+		// create layers
+		// get images
 		PF_CHECKOUT_PARAM(in_data,
-			UWV_IMPORT_LEFT,
-			(in_data->current_time + shiftL * in_data->time_step),//+ff_left*in_data->time_step, 
+			UWV_IMPORT_VIEW_1_ID,
+			(in_data->current_time + frame_shifts[1] * in_data->time_step),//+ff_left*in_data->time_step, 
 			in_data->time_step,
 			in_data->time_scale,
-			&leftbox);
-		ERR(wsP->PF_GetPixelFormat((&leftbox.u.ld), &format));
-		srcL = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, (&leftbox.u.ld)->width, (&leftbox.u.ld)->height, 1, format, srcL));
-		PF_COPY(&leftbox.u.ld,
-			srcL,
-			NULL,
-			NULL);
-		// 预览图各子图的大小
-		src_width = (&leftbox.u.ld)->width;
-		src_height = (&leftbox.u.ld)->height;
-		PF_CHECKIN_PARAM(in_data, &leftbox);
-
-		// get the middle image
-		PF_CHECKOUT_PARAM(in_data,
-			UWV_IMPORT_MIDDLE,
-			(in_data->current_time + shiftL * in_data->time_step),//+ff_left*in_data->time_step, 
-			in_data->time_step,
-			in_data->time_scale,
-			&middlebox);
-		ERR(wsP->PF_GetPixelFormat((&middlebox.u.ld), &format));
-		srcM = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, (&middlebox.u.ld)->width, (&middlebox.u.ld)->height, 1, format, srcM));
-		PF_COPY(&middlebox.u.ld,
-			srcM,
-			NULL,
-			NULL);
-		src_width = (&middlebox.u.ld)->width;
-		src_height = (&middlebox.u.ld)->height;
-		PF_CHECKIN_PARAM(in_data, &middlebox);
-
-		// get the right image
-		PF_CHECKOUT_PARAM(in_data,
-			UWV_IMPORT_RIGHT,
-			(in_data->current_time + shiftR * in_data->time_step),//+ff_right*in_data->time_step, 
-			in_data->time_step,
-			in_data->time_scale,
-			&rightbox);
-		ERR(wsP->PF_GetPixelFormat((&rightbox.u.ld), &format));
-		srcR = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, (&rightbox.u.ld)->width, (&rightbox.u.ld)->height, 1, format, srcR));
-		PF_COPY(&rightbox.u.ld,
-			srcR,
-			NULL,
-			NULL);
-		// 预览图各子图的大小
-		src_width = (&rightbox.u.ld)->width;
-		src_height = (&rightbox.u.ld)->height;
-		PF_CHECKIN_PARAM(in_data, &rightbox);
+			&checkout);
+		if ((&checkout.u.ld)->width != 0) {
+			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
+			src_imgs[0] = new  PF_EffectWorld;
+			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[0])));
+			PF_COPY(&checkout.u.ld,
+				src_imgs[0],
+				NULL,
+				NULL);
+			// 预览图各子图的大小
+			src_width = (&checkout.u.ld)->width;
+			src_height = (&checkout.u.ld)->height;
+		}
+		PF_CHECKIN_PARAM(in_data, &checkout);
 	}
 
 	// 拼合当前预览/输出图
-	out_data->width = (in_data->width) / 4;
-	out_data->height = in_data->height / 4;
-	mesh_width = (output->width) / 3; // 拼接的view的数目
-	mesh_height = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
-	PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-	PF_COPY(srcL, output, NULL, &destArea);
-	PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-	PF_COPY(srcM, output, NULL, &destArea1);
-	PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-	PF_COPY(srcR, output, NULL, &destArea2);
-	ordering_done = false; // 将调序后的输出渲染完，重置
+	if (src_imgs[0] != NULL) {
+		out_data->width = (in_data->width) / 4;
+		out_data->height = in_data->height / 4;
+		mesh_width = (output->width) / 3; // 拼接的view的数目
+		mesh_height = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
+		PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+		PF_COPY(src_imgs[0], output, NULL, &destArea);
+		PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+		PF_COPY(src_imgs[0], output, NULL, &destArea1);
+		PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+		PF_COPY(src_imgs[0], output, NULL, &destArea2);
+		ordering_done = false; // 将调序后的输出渲染完，重置
+	}
 
 	/*
 	 * TODO
@@ -801,14 +772,10 @@ Render (
 	if (homo_flag) {
 		// 计算单应前，在此作数据转换
 		Mat32f matOutput(output->width, output->height, 4);
-		Mat32f matM(srcM->width, srcM->height, 4);
-		Mat32f matL(srcL->width, srcL->height, 4);
-		Mat32f matR(srcR->width, srcR->height, 4);
+		Mat32f mat_imgs_0(src_imgs[0]->width, src_imgs[0]->height, 4);
 
 		ERR(EwToMat(in_data, output, matOutput));
-		ERR(EwToMat(in_data, srcM, matM));
-		ERR(EwToMat(in_data, srcL, matL));
-		ERR(EwToMat(in_data, srcR, matR));
+		ERR(EwToMat(in_data, src_imgs[0], mat_imgs_0));
 		//cal_success = CalHomoInKeyFrame(matL, matM, matR);
 		if (cal_success) {
 			PF_STRCPY(out_data->return_msg, "H matrix calculation finished!");
@@ -828,6 +795,8 @@ Render (
 
 	return err;
 }
+
+
 
 PF_Err DllExport
 EntryPointFunc (
