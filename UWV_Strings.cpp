@@ -38,7 +38,7 @@ TableString		g_strs[StrID_NUMTYPES] = {
 	StrID_Left,						"Choose the Left Video",
 	StrID_Middle,					"Choose the Middle Video",
 	StrID_Right,					"Choose the Right Video",
-	StrID_CorrectOrder,             "Click to correct image order manually",
+	//StrID_CorrectOrder,             "Click to correct image order manually", // 是否调整图片顺序的checkbox，不使用
 	//Presettings for the users
 	//the Lapped ratio for the left and right videos
 	StrID_Percentage,				"the Percentage of ROI",

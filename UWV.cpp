@@ -109,7 +109,7 @@ GlobalSetup (
 						   |	PF_OutFlag_PIX_INDEPENDENT //pixel independent
 						   |	PF_OutFlag_I_EXPAND_BUFFER // expand the output buffer
 						   |	PF_OutFlag_SEND_UPDATE_PARAMS_UI // set to receive PF_Cmd_UPDATE_PARAMS_UI
-		                   |    PF_OutFlag_CUSTOM_UI; // set to receive PF_Cmd_Event
+		                   |    PF_OutFlag_CUSTOM_UI; // set to receive PF_Cmd_Event，不使用
 	
 	// honor the collapse ability of each parameters group
 	out_data->out_flags2 = PF_OutFlag2_PARAM_GROUP_START_COLLAPSED_FLAG;
@@ -349,14 +349,6 @@ ParamsSetup (
 		| PF_ParamFlag_START_COLLAPSED;
 	PF_ADD_LAYER(STR(StrID_Right), -1, RIGHT_ID);
 
-	// Correct image order manually
-	AEFX_CLR_STRUCT(def);
-	PF_ADD_CHECKBOX(STR(StrID_CorrectOrder),
-		"Adjust",
-		FALSE,
-		0,
-		CORRECTORDER_ID);
-
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(IMPORT_END_ID);
 
@@ -463,7 +455,7 @@ ParamsSetup (
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(STITCH_END_ID);
 
-	// 添加UI事件捕捉层？？？
+	// 添加UI事件捕捉层，不使用
 	if (!err)
 	{
 		PF_CustomUIInfo			ci;
@@ -563,7 +555,7 @@ MakeParamCopy(
 	copy[UWV_IMPORT_LEFT]	= *actual[UWV_IMPORT_LEFT];
 	copy[UWV_IMPORT_MIDDLE] = *actual[UWV_IMPORT_MIDDLE];
 	copy[UWV_IMPORT_RIGHT]	= *actual[UWV_IMPORT_RIGHT];
-	copy[UWV_IMPORT_CORRECTORDER]  = *actual[UWV_IMPORT_CORRECTORDER];
+	// copy[UWV_IMPORT_CORRECTORDER]  = *actual[UWV_IMPORT_CORRECTORDER];
 
 	copy[PERCENTAGE_BEG_ID] = *actual[PERCENTAGE_BEG_ID];
 	copy[UWV_RATIO_L] = *actual[UWV_RATIO_L];
@@ -592,15 +584,6 @@ UserChangedParam(
 	PF_Err err = PF_Err_NONE;
 
 	switch (which_hitP->param_index) {
-
-	case UWV_IMPORT_CORRECTORDER:
-		correct_order_flag = params[UWV_IMPORT_CORRECTORDER]->u.bd.value;
-		if (correct_order_flag == FALSE) {
-			correcting_order_flag = FALSE;
-			ordering_done = false;
-		}
-		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
-		break;
 
 	case UWV_RATIO_L:
 		ratioL = params[UWV_RATIO_L]->u.sd.value / 100.f;
@@ -785,21 +768,18 @@ Render (
 		PF_CHECKIN_PARAM(in_data, &rightbox);
 	}
 
-
-	if (ordering_done) {
-		// 拼合当前预览/输出图
-		out_data->width = (in_data->width) / 4;
-		out_data->height = in_data->height / 4;
-		mesh_width = (output->width) / 3; // 拼接的view的数目
-		mesh_height = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
-		PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-		PF_COPY(srcL, output, NULL, &destArea);
-		PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-		PF_COPY(srcM, output, NULL, &destArea1);
-		PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-		PF_COPY(srcR, output, NULL, &destArea2);
-		ordering_done = false; // 将调序后的输出渲染完，重置
-	}
+	// 拼合当前预览/输出图
+	out_data->width = (in_data->width) / 4;
+	out_data->height = in_data->height / 4;
+	mesh_width = (output->width) / 3; // 拼接的view的数目
+	mesh_height = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
+	PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+	PF_COPY(srcL, output, NULL, &destArea);
+	PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+	PF_COPY(srcM, output, NULL, &destArea1);
+	PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
+	PF_COPY(srcR, output, NULL, &destArea2);
+	ordering_done = false; // 将调序后的输出渲染完，重置
 
 	/*
 	 * TODO
@@ -845,66 +825,6 @@ Render (
 		
 	}
 
-
-	return err;
-}
-
-static PF_Err
-AdjustOrder(
-	PF_InData		*in_data,
-	PF_OutData		*out_data,
-	PF_ParamDef		*params[],
-	PF_LayerDef		*output,
-	PF_EventExtra	*event_P)
-{
-	PF_Err		err = PF_Err_NONE;
-
-	A_long mesh_width_click = (in_data->width) / 12; // 缩放以后的合成的width，再除以3得到缩放后网格的大小，用于捕捉鼠标事件
-
-	if (correct_order_flag) {
-		if ((event_P->e_type == PF_Event_DO_CLICK)){
-			PF_Point mouse_downPt = {0, 0}, cornersPtA[4];
-			PF_FixedPoint mouse_layerFiPt = {0, 0};
-			mouse_downPt = *(reinterpret_cast<PF_Point*>(&event_P->u.do_click.screen_point));
-			//event_P->cbs.frame_to_source(event_P->cbs.refcon, event_P->contextH, &mouse_layerFiPt);
-
-			if (correcting_order_flag) {
-				//第二次，点击第二张图片
-				second_click_img = (mouse_downPt.h) / mesh_width_click;
-
-				//交换两次点击图片的指针
-				PF_EffectWorld * tmp = *(imgs_prt[first_click_img]);
-				*(imgs_prt[first_click_img]) = *(imgs_prt[second_click_img]);
-				*(imgs_prt[second_click_img]) = tmp;
-				
-				/* //拼合当前预览图，但是不作任何渲染，在Cmd_EVENT中输入（正常认为的当前图层，实际上不是）也没法操作
-				PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-				PF_COPY(srcL, dest_back_layer, NULL, &destArea);
-				PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-				PF_COPY(srcM, dest_back_layer, NULL, &destArea1);
-				PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-				PF_COPY(srcR, dest_back_layer, NULL, &destArea2);
-				*/
-
-				event_P->evt_out_flags = PF_EO_HANDLED_EVENT;
-				out_data->out_flags |= PF_OutFlag_FORCE_RERENDER; // 使强制马上渲染，具体触发未知
-				ordering_done = true;
-
-				//为下次调整做准备
-				first_click_img = 0;
-				second_click_img = 0;
-				correcting_order_flag = FALSE;
-			}
-			else
-			{
-				//第一次，点击第一张图片
-				first_click_img = (mouse_downPt.h)/ mesh_width_click;
-
-				//为第二次点击做准备
-				correcting_order_flag = TRUE;
-			}
-		}
-	}
 
 	return err;
 }
@@ -979,14 +899,6 @@ EntryPointFunc (
 										output);
 				break;
 
-			case PF_Cmd_EVENT:
-
-				err = AdjustOrder(	in_data,
-									out_data,
-									params,
-									output,
-									reinterpret_cast<PF_EventExtra*>(extra));
-				break;
 		}
 	}
 	catch(PF_Err &thrown_err){

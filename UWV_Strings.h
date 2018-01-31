@@ -30,9 +30,7 @@ typedef enum {
 	StrID_Left,
 	StrID_Middle,
 	StrID_Right,
-	//
-	//
-	StrID_CorrectOrder,
+	//StrID_CorrectOrder, // 是否调整图片顺序的checkbox，不使用
 	//Presettings for the users
 	//the Lapped ratio for the left and right videos
 	StrID_Percentage,
