@@ -2,7 +2,7 @@
 // Date: Sun Sep 22 12:54:18 2013 +0800
 // Author: Yuxin Wu <ppwwyyxxc@gmail.com>
 
-#define DEBUG_MODE
+
 #include "stitcher.h"
 
 #include <limits>
@@ -26,7 +26,7 @@ using namespace config;
 namespace pano {
 
 // use in development
-const static bool DEBUG_OUT = false;
+const static bool DEBUG_OUT = true;
 const static char* MATCHINFO_DUMP = "log/matchinfo.txt";
 
 Mat32f Stitcher::build() {
@@ -100,9 +100,7 @@ void Stitcher::pairwise_match() {
 	REP(i, n) REPL(j, i + 1, n) tasks.emplace_back(i, j);
 
 	PairWiseMatcher pwmatcher(feats);
-#ifndef DEBUG_MODE
 #pragma omp parallel for schedule(dynamic)
-#endif //!DEBUG_MODE
 	REP(k, (int)tasks.size()) {
 		int i = tasks[k].first, j = tasks[k].second;
 		match_image(pwmatcher, i, j);
@@ -113,9 +111,7 @@ void Stitcher::linear_pairwise_match() {
 	GuardedTimer tm("linear_pairwise_match()");
 	int n = imgs.size();
 	PairWiseMatcher pwmatcher(feats);
-#ifndef DEBUG_MODE
 #pragma omp parallel for schedule(dynamic)
-#endif //!DEBUG_MODE
 	REP(i, n) {
 		int next = (i + 1) % n;
 		if (!match_image(pwmatcher, i, next)) {

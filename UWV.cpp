@@ -37,10 +37,61 @@
 
 */
 
-#include <vector> // 标准库
 #include "UWV.h"
 
-A_long src_width, src_height, mesh_width, mesh_height; // 图片和网格大小信息
+// here confirm the config PARAS
+#ifndef DEATH_PARAS
+#define DEATH_PARAS
+extern bool CYLINDER = false;
+extern bool TRANS = false;
+extern bool CROP = false;
+extern float FOCAL_LENGTH = 0.0;
+extern bool ESTIMATE_CAMERA = false;
+extern bool STRAIGHTEN = false;
+extern int MAX_OUTPUT_SIZE = 0;
+extern bool ORDERED_INPUT = false;
+extern bool LAZY_READ = false;
+
+extern int SIFT_WORKING_SIZE = 0;
+extern int NUM_OCTAVE = 0;
+extern int NUM_SCALE = 0;
+extern float SCALE_FACTOR = 0.0;
+
+extern float GAUSS_SIGMA = 0;
+extern int GAUSS_WINDOW_FACTOR = 0;
+
+extern float JUDGE_EXTREMA_DIFF_THRES = 0;
+extern float CONTRAST_THRES = 0;
+extern float PRE_COLOR_THRES = 0;
+extern float EDGE_RATIO = 0;
+
+extern int CALC_OFFSET_DEPTH = 0;
+extern float OFFSET_THRES = 0;
+
+extern float ORI_RADIUS = 0;
+extern int ORI_HIST_SMOOTH_COUNT = 0;
+
+extern int DESC_HIST_SCALE_FACTOR = 0;
+extern int DESC_INT_FACTOR = 0;
+
+extern float MATCH_REJECT_NEXT_RATIO = 0;
+
+extern int RANSAC_ITERATIONS = 0;
+extern double RANSAC_INLIER_THRES = 0;
+extern float INLIER_IN_MATCH_RATIO = 0;
+extern float INLIER_IN_POINTS_RATIO = 0;
+
+extern float SLOPE_PLAIN = 0;
+
+extern int MULTIPASS_BA = 0;
+extern float LM_LAMBDA = 0;
+
+extern int MULTIBAND = 0;
+#endif
+
+
+
+A_long mesh_width, mesh_height_1, src_width=0, src_height=0; // 图片和网格大小信息
 PF_EffectWorld *srcL = NULL, *srcM = NULL, *srcR = NULL;
 
 // I -- fundalmental matrix
@@ -53,7 +104,7 @@ A_long heigh_output;
 
 // add by chromiumikx
 PF_ParamDef checkout;
-std::vector<PF_EffectWorld *>src_imgs{ 12, NULL };
+std::vector<PF_EffectWorld *>src_imgs( 12, NULL );
 
 static float focal_length = UWV_ESTIMATION_DFLT;
 
@@ -66,13 +117,18 @@ static bool correct_order_flag = FALSE,
 static int proj_method = UWV_METHOD_DFLT;
 
 // add by chromiumikx
+static int num_selected_imgs;
 static int first_click_img;
 static int second_click_img;
 static std::vector<PF_EffectWorld **> imgs_prt{&srcL, &srcM, &srcR};
-static PF_EffectWorld *dest_back_layer;
+static PF_EffectWorld *dest_back_layer; // background image
 static bool ordering_done = false;
-static std::vector<float> lapped_ratios{ 12, UWV_RATIO_DFLT };
-static std::vector<int> frame_shifts{ 12, UWV_FRAME_SHIFT_DFLT };
+static std::vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
+static std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
+
+static std::vector<bool>flag_which_imported(12, false); // use for mark which view have been imported
+static int flag_now_imported; // use for mark which view is being imported 
+static Mat32f result_img;
 
 static PF_Err 
 About (	
@@ -531,6 +587,8 @@ UserChangedParam(
 	case UWV_IMPORT_VIEW_1 + 9:
 	case UWV_IMPORT_VIEW_1 + 10:
 	case UWV_IMPORT_VIEW_1 + 11:
+		flag_now_imported = (which_hitP->param_index) - UWV_IMPORT_VIEW_1;
+		flag_which_imported[(which_hitP->param_index) - UWV_IMPORT_VIEW_1] = true; // flag_which_imported[0] tags UWV_IMPORT_VIEW_1 if be selected
 		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER; // 每次导入图片都重新渲染
 		break;
 
@@ -608,11 +666,9 @@ UpdateParameterUI(
 		param_copy[FRAME_SHIFT_BEG_ID].flags	&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		param_copy[STITCH_BEG_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 
-		int i;
-		for (i = 0; i < 12; i++) {
-			param_copy[UWV_PERCENTAGE_RATIO_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-			param_copy[UWV_FRAME_SHIFT_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-		}
+		// auto expand RATIO_1 and FRAME_SHIFT_1
+		param_copy[UWV_PERCENTAGE_RATIO_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
+		param_copy[UWV_FRAME_SHIFT_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 
 		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
 			IMPORT_BEG_ID,
@@ -627,14 +683,13 @@ UpdateParameterUI(
 			STITCH_BEG_ID,
 			&param_copy[STITCH_BEG_ID]));
 		
-		for (i = 0; i < 12; i++) {
-			ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
-				UWV_PERCENTAGE_RATIO_1_ID,
-				&param_copy[UWV_PERCENTAGE_RATIO_1_ID]));
-			ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
-				UWV_FRAME_SHIFT_1_ID,
-				&param_copy[UWV_FRAME_SHIFT_1_ID]));
-		}
+		// auto expand RATIO_1 and FRAME_SHIFT_1
+		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
+			UWV_PERCENTAGE_RATIO_1_ID,
+			&param_copy[UWV_PERCENTAGE_RATIO_1_ID]));
+		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
+			UWV_FRAME_SHIFT_1_ID,
+			&param_copy[UWV_FRAME_SHIFT_1_ID]));
 	}
 
 	if (!err && params[UWV_PROJECTION_METHOD]->u.pd.value == 2) {
@@ -708,53 +763,59 @@ Render (
 	PF_EffectWorld	*pure_color_layer = &params[UWV_INPUT]->u.ld; // 流程：把别的素材的当前帧当作参数（处理后）写到output上，
 
 	// 读取当前将要处理的帧
-	// 因此，鼠标调节已经不可用，因为每次rerender会重新checkout，覆盖掉指针调整
+	// 鼠标调节已经不可用
+	// 每次rerender会重新checkout，会覆盖指针调整
 	AEGP_SuiteHandler suites(in_data->pica_basicP);
 	PF_WorldSuite2 *wsP = NULL;
 	PF_PixelFormat format;
 	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
+	int i;
+	int num_selected_imgs = 0;
+	// loop every selecting action, little bit low efficient
+	for(i=0; i<12; i++)
 	{
 		// create layers
 		// get images
 		PF_CHECKOUT_PARAM(in_data,
-			UWV_IMPORT_VIEW_1_ID,
-			(in_data->current_time + frame_shifts[1] * in_data->time_step),//+ff_left*in_data->time_step, 
+			(i+2),
+			(in_data->current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
 			in_data->time_step,
 			in_data->time_scale,
 			&checkout);
-		if ((&checkout.u.ld)->width != 0) {
+		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
 			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
-			src_imgs[0] = new  PF_EffectWorld;
-			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[0])));
+			src_imgs[i] = new  PF_EffectWorld;
+			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
 			PF_COPY(&checkout.u.ld,
-				src_imgs[0],
+				src_imgs[i],
 				NULL,
 				NULL);
+			num_selected_imgs = num_selected_imgs  + 1;
 			// 预览图各子图的大小
-			src_width = (&checkout.u.ld)->width;
-			src_height = (&checkout.u.ld)->height;
+			src_width = src_imgs[i]->width;
+			src_height = src_imgs[i]->height;
 		}
 		PF_CHECKIN_PARAM(in_data, &checkout);
 	}
 
-	// 拼合当前预览/输出图
-	if (src_imgs[0] != NULL) {
-		out_data->width = (in_data->width) / 4;
-		out_data->height = in_data->height / 4;
-		mesh_width = (output->width) / 3; // 拼接的view的数目
-		mesh_height = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
-		PF_Rect destArea = { 0, mesh_height, mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-		PF_COPY(src_imgs[0], output, NULL, &destArea);
-		PF_Rect destArea1 = { mesh_width, mesh_height, 2 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-		PF_COPY(src_imgs[0], output, NULL, &destArea1);
-		PF_Rect destArea2 = { 2 * mesh_width, mesh_height, 3 * mesh_width,  (src_height*mesh_width) / (src_width)+mesh_height };
-		PF_COPY(src_imgs[0], output, NULL, &destArea2);
-		ordering_done = false; // 将调序后的输出渲染完，重置
+	// 拼合当前预览图
+	if (num_selected_imgs  != 0) {
+		out_data->width = (in_data->width) / 4; // ??
+		out_data->height = (in_data->height) / 4; // ??
+		mesh_width = (output->width) / num_selected_imgs; // 拼接的view的数目
+		mesh_height_1 = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
+		for (i = 0; i < num_selected_imgs; i++) {
+			if (src_imgs[i] != NULL) {
+				PF_Rect destArea = { i*mesh_width, mesh_height_1, (i + 1)*mesh_width, output->height - mesh_height_1 };
+				PF_COPY(src_imgs[i], output, NULL, &destArea);
+				ordering_done = false; // 将调序后的输出渲染完，重置
+			}
+		}
 	}
+
 
 	/*
 	 * TODO
-	 * 0、点击交换图片在纯色图层的位置：偶次、异图 点击
 	 * 1、参数预设
 	 * 2、参数更新
 	 * 3、图像拼接
@@ -771,12 +832,27 @@ Render (
 	// do the h calculation
 	if (homo_flag) {
 		// 计算单应前，在此作数据转换
-		Mat32f matOutput(output->width, output->height, 4);
-		Mat32f mat_imgs_0(src_imgs[0]->width, src_imgs[0]->height, 4);
+		Mat32f mat_output(output->width, output->height, 4);
+		Mat32f mat_one_img(src_imgs[i]->width, src_imgs[i]->height, 4);
+		vector<Mat32f> mat_imgs(num_selected_imgs, mat_one_img);
 
-		ERR(EwToMat(in_data, output, matOutput));
-		ERR(EwToMat(in_data, src_imgs[0], mat_imgs_0));
+		ERR(EwToMat(in_data, output, mat_output));
+
 		//cal_success = CalHomoInKeyFrame(matL, matM, matR);
+		// stick stitcher.project here
+		/* cal the H once */
+		std::vector<std::string> imgs_path_str;
+		int i;
+		for (i = 0; i < num_selected_imgs; i++) {
+			std::string arg = i + "_img.jpg";
+			imgs_path_str.emplace_back(arg);
+
+			// 图片格式转换
+			ERR(EwToMat(in_data, src_imgs[0], mat_imgs[i]));
+		}
+		//static CylinderStitcher p(move(imgs_path_str));
+		//result_img = p.build();
+
 		if (cal_success) {
 			PF_STRCPY(out_data->return_msg, "H matrix calculation finished!");
 			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
@@ -789,7 +865,7 @@ Render (
 
 	// do the stitch work
 	if (mosaic_flag) {
-		
+		//res = p.build();
 	}
 
 
@@ -874,6 +950,4 @@ EntryPointFunc (
 		err = thrown_err;
 	}
 	return err;
-}
-
-
+};

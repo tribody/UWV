@@ -3,7 +3,7 @@
 
 #include "stitcherbase.h"
 #include "lib/timer.h"
-#define DEBUG_MODE
+
 namespace pano {
 
 void StitcherBase::calc_feature() {
@@ -11,9 +11,7 @@ void StitcherBase::calc_feature() {
 	feats.resize(imgs.size());
 	keypoints.resize(imgs.size());
 	// detect feature
-#ifndef DEBUG_MODE
 #pragma omp parallel for schedule(dynamic)
-#endif // !DEBUG_MODE
 	for (int k = 0; k < imgs.size(); k++) {
 		imgs[k].load();
 		feats[k] = feature_det->detect_feature(*imgs[k].img);

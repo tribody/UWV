@@ -2,8 +2,6 @@
 //Date:
 //Author: Yuxin Wu <ppwwyyxxc@gmail.com>
 
-//#define DEBUG_MODE
-
 #include "extrema.h"
 #include "lib/config.h"
 #include "lib/matrix.h"
@@ -39,9 +37,7 @@ vector<SSPoint> ExtremaDetector::get_extrema() const {
 	TotalTimer tm("extrema");
 	int npyramid = dog.noctave, nscale = dog.nscale;
 	vector<SSPoint> ret;
-#ifndef DEBUG_MODE
 #pragma omp parallel for schedule(dynamic)
-#endif // !DEBUG_MODE
 	REP(i, npyramid)
 		REPL(j, 1, nscale - 2) {
 			auto v = get_local_raw_extrema(i, j);
@@ -145,7 +141,7 @@ std::pair<Vec, Vec> ExtremaDetector::calc_kp_offset_iter(
 	delta.write_to(pdpx.ptr());
 
 	Matrix inv;
-	if (! m.inverse(inv)) {	  // pseudo inverse is slow,if true, inv stores the inverse matrix
+	if (! m.inverse(inv)) {	  // pseudo inverse is slow
 		inv = m.pseudo_inverse();
 	}
 	auto prod = inv.prod(pdpx);

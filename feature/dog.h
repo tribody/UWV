@@ -15,8 +15,8 @@ class GaussianPyramid {
 	private:
 		int nscale;
 		std::vector<Mat32f> data; // len = nscale
-		std::vector<Mat32f> mag; // len = nscale,magnitude of dx and dy
-		std::vector<Mat32f> ort; // len = nscale, value \in [0, 2 * pi],argument of dx and dy
+		std::vector<Mat32f> mag; // len = nscale
+		std::vector<Mat32f> ort; // len = nscale, value \in [0, 2 * pi]
 
 		void cal_mag_ort(int);
 

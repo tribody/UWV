@@ -25,6 +25,9 @@
 
 #pragma once
 
+#define _USE_MATH_DEFINES
+#define NOMINMAX // for max confliction
+
 #ifndef UWV_H
 #define UWV_H
 
@@ -59,12 +62,39 @@ typedef short int			int16;
 #include "AEFX_ChannelDepthTpl.h"
 #include "AEGP_SuiteHandler.h"
 
-#include "mat.h"
-// #include <opencv2/opencv.hpp> // 使用OpenCV
-// #include <opencv2/core/core.hpp>  
-// #include <opencv2/highgui/highgui.hpp> 
-
 #include "UWV_Strings.h"
+
+#include "lib/mat.h"
+#include <vector>
+#include <cmath>
+#include "feature/extrema.h"
+#include "feature/matcher.h"
+#include "feature/orientation.h"
+#include "lib/mat.h"
+#include "lib/config.h"
+#include "lib/geometry.h"
+#include "lib/imgproc.h"
+#include "lib/planedrawer.h"
+#include "lib/polygon.h"
+#include "lib/timer.h"
+#include "stitch/cylstitcher.h"
+#include "stitch/match_info.h"
+#include "stitch/stitcher.h"
+#include "stitch/transform_estimate.h"
+#include "stitch/warp.h"
+#include <ctime>
+#include <cassert>
+
+#include "imgproc.h"
+#include "feature/matcher.h"
+#include "stitch/blender.h"
+#define PLG_IN
+
+using namespace std;
+using namespace pano;
+using namespace config;
+
+
 
 /* Versioning information */
 
@@ -73,6 +103,7 @@ typedef short int			int16;
 #define	BUG_VERSION					0
 #define	STAGE_VERSION				PF_Stage_DEVELOP
 #define	BUILD_VERSION				1
+
 
 
 /* Macros */
@@ -93,61 +124,10 @@ typedef short int			int16;
 #define UWV_METHOD_NUM			2	
 #define	UWV_METHOD_DFLT		1
 
-//general modes: if no mode is set, will use naive mode
-#define CYLINDER					0
-#define ESTIMATE_CAMERA				1
-#define TRANS						0
-
-#define ORDERED_INPUT				1			//set this option when input is ordered
-#define CROP						1			//crop the result to a rectangle
-#define MAX_OUTPUT_SIZE				8000		//maximum possible width / height of output image
-#define LAZY_READ					1			//use images lazily and release when not needed.
-												//save memory in feature stage, but slower in blending
-//These parameters are tuned for images of about 0.7 megapixel
-//For smaller images, you may need to change parameters for more features
-#define CONTRAST_THRES				3e-2
-#define JUDGE_EXTREMA_DIFF_THRES	2e-3		//lowe: 3e-2. smaller value gives more feature
-												//!! making it small could result in low-quality keypoint
-#define EDGE_RATIO					10			//lowe: 10. larger value gives more feature
-
-#define PRE_COLOR_THRES				5e-2
-#define CALC_OFFSET_DEPTH			4
-#define OFFSET_THRES				0.5			//0.3 is still good, this settings has big impact
-												//lowe used 0.5. smaller value gives more feature
-//descriptor and matching related
-#define ORI_RADIUS					4.5			//this radius might be large?
-#define ORI_HIST_SMOOTH_COUNT		2
-#define	DESC_HIST_SCALE_FACTOR		3
-#define	DESC_INT_FACTOR				512
-#define MATCH_REJECT_NEXT_RATIO		0.8
-//keypoint related parameters
-#define	UWV_SIFT_WORKING_SIZE	800			//working resolution for sift
-#define NUM_OCTAVE					3
-#define NUM_SCALE					7
-#define SCALE_FACTOR				1.4142135623
-#define GAUSS_SIGMA					1.4142135623
-#define GAUSS_WINDOW_FACTOR			4			//larger value gives less feature
-//RANSAC, use more iteration if hard to find match
-#define	UWV_RANSAC_ITERATIONS	1500		//lowe: 500
-#define RANSAC_INLIER_THRES			3.5			//inlier threshold corresponding to 800-resolution images
-#define INLIER_IN_MATCH_RATIO		0.1			//number of inlier divided by all matches in the overlapping region
-#define INLIER_IN_POINTS_RATIO		0.04		//number of inlier divided by all keypoints in the overlapping region
-
-#define	UWV_GAIN_MIN			0
-#define	UWV_GAIN_MAX			100
-#define	UWV_GAIN_DFLT			10
-//optimization and tuning
-#define	STRAIGHTEN					1
-#define SLOPE_PLAIN					8e-3
-#define LM_LAMBDA					5
-#define	MULTIPASS_BA				1
-//0: only perform one-pass bundle adjustment for all images and connections (fast)
-//1: perform BA for each image added(suggested)
-//2: perform BA for each connection found(best quality, slow)
-#define MULTIBAND					0			//set to 0 to disable, set to k to use k bands
-
 /* Parameter defaults */
 // Configures
+
+
 
 /* 这里决定了控件在ParamenterUI上的位置（下标） */
 /* 这里的两个枚举是一一对应的，都是某个控件的位置（下标） */
@@ -295,7 +275,7 @@ typedef struct {
 	extern "C" {
 #endif
 
-// 声明函数
+// 声明UWV中的函数
 static PF_Err
 MatToEw(PF_InData *in_data, Mat32f &imgMat, PF_EffectWorld *imgE);
 

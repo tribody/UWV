@@ -100,7 +100,7 @@ Matrix Matrix::pseudo_inverse() const {
 	}
 	Matrix ret(m_cols, m_rows);
 	auto res = to_eigenmap(ret);
-	res = svd.matrixV() * sinv.asDiagonal() * svd.matrixU().transpose();	//get the inverse of UDV
+	res = svd.matrixV() * sinv.asDiagonal() * svd.matrixU().transpose();
 	m_assert(ret.at(0, 2) == res(0, 2));
 	return ret;
 }

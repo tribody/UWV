@@ -27,6 +27,7 @@ Mat32f CylinderProject::project(const Mat32f& img, vector<Vec2D>& pts) const {
 	Vec2D offset = project(shape, pts);
 
 	real_t sizefactor_inv = 1.0 / sizefactor;
+	Vec2D ajust(img.width() / 2, img.height() / 2); // Debug Here
 
 	Mat32f mat(shape.h, shape.w, 3);
 	fill(mat, Color::NO);
@@ -40,6 +41,10 @@ Mat32f CylinderProject::project(const Mat32f& img, vector<Vec2D>& pts) const {
 		}
 	}
 
+	Mat32f mat0(shape.h, shape.w, 3);
+	fill(mat0, Color::NO);
+	write_rgb("mat.jpg", mat0); //Debug Here
+	write_rgb("mat.jpg", mat); //Debug Here
 	return mat;
 }
 
@@ -70,7 +75,7 @@ Vec2D CylinderProject::project(Shape2D& shape, std::vector<Vec2D>& pts) const {
 CylinderProject CylinderWarper::get_projector(int w, int h) const {
 	// 43.266 = hypot(36, 24)
 	int r = hypot(w, h) * (config::FOCAL_LENGTH / 43.266);
-	Vec cen(w / 2, h / 2 * h_factor, r);
+	Vec cen(w / 2, h / 2 * h_factor, r); // 较直后的图片中心，hfactor跟较直过程有关
 	return CylinderProject(r, cen, r);
 }
 

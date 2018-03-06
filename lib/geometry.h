@@ -11,7 +11,6 @@
 #include "utils.h"
 #include "debugutils.h"
 
-
 class Geometry {
 	public:
 		int w, h;
@@ -23,7 +22,7 @@ class Geometry {
 		{ return w * h; }
 
 		real_t ratio() const
-		{ return (real_t) std::max(w, h) / std::min(w, h); }
+		{ return (real_t) (std::max)(w, h) / (std::min)(w, h); }
 
 		bool contain(int x, int y)
 		{ return (x >= 0 && x < w && y >= 0 && y < h); }

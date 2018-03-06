@@ -1,4 +1,4 @@
-//File: dist.cc
+//File: dist.cpp
 //Date:
 //Author: Yuxin Wu <ppwwyyxxc@gmail.com>
 
@@ -8,6 +8,7 @@
 #include "lib/timer.h"
 
 #include <limits>
+
 
 namespace pano {
 

@@ -93,9 +93,9 @@ void CylinderStitcher::build_warp() {;
 }
 
 float CylinderStitcher::update_h_factor(float nowfactor,
-		float & minslope,
+		float & minslope, // 所有图片中心到全局坐标系原点的连线的最小斜率，
 		float & bestfactor,
-		vector<Homography>& mat,
+		vector<Homography>& mat, // 到参考图的单应
 		const vector<MatchData>& matches) {
 	const int n = imgs.size(), mid = bundle.identity_idx;
 	const int start = mid, end = n, len = end - start;

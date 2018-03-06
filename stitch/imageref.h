@@ -17,6 +17,7 @@ namespace pano {
 
 			void load() {
 				if (img) return;
+				/* ´Ë´¦ÐÞ¸Ästitcher */
 				img = new Mat32f{read_img(fname.c_str())};
 				_width = img->width();
 				_height = img->height();
