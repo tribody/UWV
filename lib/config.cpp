@@ -36,15 +36,16 @@ float ConfigParser::get(const std::string& s) {
 }
 
 // here confirm the config PARAS
+// 在这里配置stitcher默认参数
 bool CYLINDER = false;
 bool TRANS = false;
 bool CROP = true;
 float FOCAL_LENGTH = 37;
 bool ESTIMATE_CAMERA = true;
 bool STRAIGHTEN = true;
-int MAX_OUTPUT_SIZE = 8000;
-bool ORDERED_INPUT = false;
-bool LAZY_READ = true;
+int MAX_OUTPUT_SIZE = 12000;
+bool ORDERED_INPUT = true;
+bool LAZY_READ = false;
 
 int SIFT_WORKING_SIZE = 800;
 int NUM_OCTAVE = 3;

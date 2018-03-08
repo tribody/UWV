@@ -58,7 +58,7 @@ class StitcherBase {
 		StitcherBase(const StitcherBase&) = delete;
 		StitcherBase& operator = (const StitcherBase&) = delete;
 
-		virtual Mat32f build() = 0;
+		virtual Mat32f only_build_homog() = 0;
 
 		virtual ~StitcherBase() = default;
 };

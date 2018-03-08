@@ -18,7 +18,13 @@ using namespace std;
 
 namespace pano {
 
-Mat32f CylinderStitcher::build() {
+Mat32f CylinderStitcher::only_render() {
+	// bundle.component[0].imgptr // ²Ù×÷/Ìæ»» ±»blendµÄÍ¼Æ¬
+	auto ret = bundle.blend();
+	return perspective_correction(ret);
+}
+
+Mat32f CylinderStitcher::only_build_homog() {
 	calc_feature();
 	bundle.identity_idx = imgs.size() >> 1;
 	build_warp();

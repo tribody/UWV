@@ -37,7 +37,8 @@ class CylinderStitcher : public StitcherBase {
 					bundle.component[i].imgptr = &imgs[i];
 			}
 
-		virtual Mat32f build();
+		virtual Mat32f only_build_homog();
+		Mat32f only_render(); // add a only_render function
 };
 
 

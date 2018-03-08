@@ -80,6 +80,8 @@ static std::vector<bool>flag_which_imported(12, false); // use for mark which vi
 static int flag_now_imported; // use for mark which view is being imported 
 static Mat32f mat_result_img;
 
+
+
 static PF_Err 
 About (	
 	PF_InData		*in_data,
@@ -781,11 +783,11 @@ Render (
 
 	// do the h calculation
 	if (flag_calc_homog) {
-		// 计算单应前，在此作数据转换
-		// Mat32f mat_one_img(src_imgs[0]->height, src_imgs[0]->width, 3); // !!! mat32f数据结构：（height, witdth, channels）
-		vector<Mat32f> mat_imgs;
 
-		//cal_success = CalHomoInKeyFrame(matL, matM, matR);
+		// 计算单应前，在此作数据转换
+		// Mat32f mat_one_img(src_imgs[0]->height, src_imgs[0]->width, 3); // !!! mat32f数据结构：（height, witdth, channels） // no need
+	    vector<Mat32f> mat_imgs;
+		// cal_success = CalHomoInKeyFrame(matL, matM, matR);
 		// stick stitcher.project here
 		/* cal the H once */
 		for (i = 0; i < num_selected_imgs; i++) {
@@ -793,19 +795,22 @@ Render (
 			// 图片格式转换
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
-
-		static CylinderStitcher p(move(mat_imgs));
-		mat_result_img = p.build();
+		CylinderStitcher h_calc_er(move(mat_imgs));
+		mat_result_img = h_calc_er.only_build_homog();
+		if(1)cal_success=true;
+		mat_result_img = crop(mat_result_img);
 		
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
 		PF_EffectWorld* ew_result_img  = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, (src_imgs[0])->width, (src_imgs[0])->height, 1, format, (ew_result_img)));
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
 		PF_COPY(ew_result_img, output, NULL, NULL);
 
 
 		if (cal_success) {
+			cal_success = false;
+			params[UWV_MOSAIC]->ui_flags &= ~PF_PUI_DISABLED; // 允许 拼接
 			PF_STRCPY(out_data->return_msg, "H matrix calculation finished!");
 			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
 		} else {
@@ -817,7 +822,35 @@ Render (
 
 	// do the stitch work
 	if (mosaic_flag) {
-		//res = p.build();
+		/*
+
+		// vector<Mat32f> mat_imgs;
+		// cal_success = CalHomoInKeyFrame(matL, matM, matR);
+		// stick stitcher.project here
+		// cal the H once
+		for (i = 0; i < num_selected_imgs; i++) {
+			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
+			// 图片格式转换
+			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
+		}
+
+		output_stitcher(move(mat_imgs)); 
+		auto ret_2 = output_stitcher.bundle.blend();
+		mat_result_img = perspective_correction(ret_2);
+		mat_result_img = crop(mat_result_img);
+
+		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
+		//PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
+
+		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
+		mat_result_img.m_data = NULL;
+		PF_COPY(ew_result_img, output, NULL, NULL); // 测试 debug
+
+		// PF_STRCPY(out_data->return_msg, "Stitched finished!");
+		// out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
+
+		*/
 	}
 
 
