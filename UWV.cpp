@@ -39,56 +39,6 @@
 
 #include "UWV.h"
 
-// here confirm the config PARAS
-#ifndef DEATH_PARAS
-#define DEATH_PARAS
-extern bool CYLINDER = false;
-extern bool TRANS = false;
-extern bool CROP = false;
-extern float FOCAL_LENGTH = 0.0;
-extern bool ESTIMATE_CAMERA = false;
-extern bool STRAIGHTEN = false;
-extern int MAX_OUTPUT_SIZE = 0;
-extern bool ORDERED_INPUT = false;
-extern bool LAZY_READ = false;
-
-extern int SIFT_WORKING_SIZE = 0;
-extern int NUM_OCTAVE = 0;
-extern int NUM_SCALE = 0;
-extern float SCALE_FACTOR = 0.0;
-
-extern float GAUSS_SIGMA = 0;
-extern int GAUSS_WINDOW_FACTOR = 0;
-
-extern float JUDGE_EXTREMA_DIFF_THRES = 0;
-extern float CONTRAST_THRES = 0;
-extern float PRE_COLOR_THRES = 0;
-extern float EDGE_RATIO = 0;
-
-extern int CALC_OFFSET_DEPTH = 0;
-extern float OFFSET_THRES = 0;
-
-extern float ORI_RADIUS = 0;
-extern int ORI_HIST_SMOOTH_COUNT = 0;
-
-extern int DESC_HIST_SCALE_FACTOR = 0;
-extern int DESC_INT_FACTOR = 0;
-
-extern float MATCH_REJECT_NEXT_RATIO = 0;
-
-extern int RANSAC_ITERATIONS = 0;
-extern double RANSAC_INLIER_THRES = 0;
-extern float INLIER_IN_MATCH_RATIO = 0;
-extern float INLIER_IN_POINTS_RATIO = 0;
-
-extern float SLOPE_PLAIN = 0;
-
-extern int MULTIPASS_BA = 0;
-extern float LM_LAMBDA = 0;
-
-extern int MULTIBAND = 0;
-#endif
-
 
 
 A_long mesh_width, mesh_height_1, src_width=0, src_height=0; // 图片和网格大小信息
@@ -110,7 +60,7 @@ static float focal_length = UWV_ESTIMATION_DFLT;
 
 static bool correct_order_flag = FALSE,
             correcting_order_flag = FALSE,
-            homo_flag = false,
+            flag_calc_homog = false,
             cal_success = false,
 			mosaic_flag = false;
 
@@ -128,7 +78,7 @@ static std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
 static std::vector<bool>flag_which_imported(12, false); // use for mark which view have been imported
 static int flag_now_imported; // use for mark which view is being imported 
-static Mat32f result_img;
+static Mat32f mat_result_img;
 
 static PF_Err 
 About (	
@@ -631,7 +581,7 @@ UserChangedParam(
 		break;
 	
 	case UWV_HOMOGRAPHY:
-		homo_flag = true;
+		flag_calc_homog = true;
 		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
 		break;
 
@@ -712,17 +662,17 @@ static PF_Err
 EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
 	int w = imgE->width,
 		h = imgE->height,
-		rb = imgE->rowbytes;
+		rb = imgE->rowbytes; // 每次步进，下一像素
 
 	PF_Pixel8 *pixelP = NULL;
 	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
 
-	for (int y = 0; y < h; y++) {
-		for (int x = 0; x < w; x++) {
-			imgMat.at(x, y, 0) = pixelP[x].blue;
-			imgMat.at(x, y, 1) = pixelP[x].green;
-			imgMat.at(x, y, 2) = pixelP[x].red;
-			imgMat.at(x, y, 3) = pixelP[x].alpha;
+	for (int y = 0; y < imgMat.rows(); y++) {
+		for (int x = 0; x < imgMat.cols(); x++) {
+			imgMat.at(y, x, 0) = (float)(pixelP[x].blue)/255.0;
+			imgMat.at(y, x, 1) = (float)(pixelP[x].green)/255.0;
+			imgMat.at(y, x, 2) = (float)(pixelP[x].red)/255.0;
+			//imgMat.at(y, x, 3) = pixelP[x].alpha;
 		}
 		pixelP = (PF_Pixel8*)((char*)pixelP + rb); //Move to the next line
 	}
@@ -730,20 +680,20 @@ EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
 }
 
 static PF_Err
-MatToEw(PF_InData *in_data, Mat32f &imgMat, PF_EffectWorld *imgE) {
-	int w = imgMat.cols(),
-		h = imgMat.rows(),
+MatToEw(PF_InData *in_data, Mat32f *imgMat, PF_EffectWorld *imgE) {
+	int w = imgMat->cols(),
+		h = imgMat->rows(),
 		rb = imgE->rowbytes;
 
 	PF_Pixel8 *pixelP = NULL;
 	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
 
-	for (int y = 0; y < h; y++) {
+	for (int y = 0; y < h; y++) { // 注意对应mat32f的格式
 		for (int x = 0; x < w; x++) {
-			pixelP[x].blue = imgMat.at(x, y, 0);
-			pixelP[x].green = imgMat.at(x, y, 1);
-			pixelP[x].red = imgMat.at(x, y, 2);
-			pixelP[x].alpha = imgMat.at(x, y, 3);
+			pixelP[x].blue = 255 * imgMat->at(y, x, 0);
+			pixelP[x].green = 255 * imgMat->at(y, x, 1);
+			pixelP[x].red = 255 * imgMat->at(y, x, 2);
+			pixelP[x].alpha = 255;//imgMat.at(y, x, 3);
 		}
 		pixelP = (PF_Pixel8*)((char*)pixelP + rb);
 	}
@@ -830,28 +780,30 @@ Render (
 	}
 
 	// do the h calculation
-	if (homo_flag) {
+	if (flag_calc_homog) {
 		// 计算单应前，在此作数据转换
-		Mat32f mat_output(output->width, output->height, 4);
-		Mat32f mat_one_img(src_imgs[i]->width, src_imgs[i]->height, 4);
-		vector<Mat32f> mat_imgs(num_selected_imgs, mat_one_img);
-
-		ERR(EwToMat(in_data, output, mat_output));
+		// Mat32f mat_one_img(src_imgs[0]->height, src_imgs[0]->width, 3); // !!! mat32f数据结构：（height, witdth, channels）
+		vector<Mat32f> mat_imgs;
 
 		//cal_success = CalHomoInKeyFrame(matL, matM, matR);
 		// stick stitcher.project here
 		/* cal the H once */
-		std::vector<std::string> imgs_path_str;
-		int i;
 		for (i = 0; i < num_selected_imgs; i++) {
-			std::string arg = i + "_img.jpg";
-			imgs_path_str.emplace_back(arg);
-
+			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
 			// 图片格式转换
-			ERR(EwToMat(in_data, src_imgs[0], mat_imgs[i]));
+			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
-		//static CylinderStitcher p(move(imgs_path_str));
-		//result_img = p.build();
+
+		static CylinderStitcher p(move(mat_imgs));
+		mat_result_img = p.build();
+		
+		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
+		PF_EffectWorld* ew_result_img  = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (src_imgs[0])->width, (src_imgs[0])->height, 1, format, (ew_result_img)));
+
+		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
+		PF_COPY(ew_result_img, output, NULL, NULL);
+
 
 		if (cal_success) {
 			PF_STRCPY(out_data->return_msg, "H matrix calculation finished!");
@@ -860,7 +812,7 @@ Render (
 			PF_STRCPY(out_data->return_msg, "H matrix calculation failed!");
 			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
 		}
-		homo_flag = false;
+		flag_calc_homog = false;
 	}
 
 	// do the stitch work

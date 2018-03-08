@@ -81,6 +81,60 @@
     <ClInclude Include="..\..\..\Util\String_Utils.h">
       <Filter>Headers\AE</Filter>
     </ClInclude>
+    <ClInclude Include="..\feature\dist.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\third-party\flann\flann.hpp">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\blender.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\camera.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\camera_estimator.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\cylstitcher.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\homography.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\imageref.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\incremental_bundle_adjuster.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\mat.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\match_info.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\multiband.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\projection.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\stitcher.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\stitcher_image.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\stitcherbase.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\transform_estimate.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\stitch\warp.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\Util\AEGP_SuiteHandler.cpp">
@@ -91,6 +145,108 @@
     </ClCompile>
     <ClCompile Include="..\UWV.cpp" />
     <ClCompile Include="..\UWV_Strings.cpp" />
+    <ClCompile Include="..\stitch\blender.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\camera.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\camera_estimator.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\cylstitcher.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\debug.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\homography.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\incremental_bundle_adjuster.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\multiband.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\stitcher.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\stitcher_image.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\stitcherbase.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\transform_estimate.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\stitch\warp.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\color.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\config.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\debugutils.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\imgio.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\imgproc.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\kdtree.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\matrix.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\planedrawer.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\polygon.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\timer.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\lib\utils.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\third-party\lodepng\lodepng.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\brief.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\dist.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\dog.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\extrema.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\feature.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\gaussian.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\matcher.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\orientation.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\feature\sift.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\UWVPiPL.r">

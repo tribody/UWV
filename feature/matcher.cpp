@@ -12,9 +12,10 @@ using namespace config;
 
 #ifdef _MSC_VER
 // necessary to define here since flann doesn't provide serialization for size_t as unsigned long long
+// in this UWV project, we take back this line, because of x64 structure
 namespace flann {
   namespace serialization {
-    //BASIC_TYPE_SERIALIZER(size_t);
+	//BASIC_TYPE_SERIALIZER(size_t);
   }
 }
 #endif
@@ -88,7 +89,7 @@ MatchData PairWiseMatcher::match(int i, int j) const {
 	static const float REJECT_RATIO_SQR = MATCH_REJECT_NEXT_RATIO * MATCH_REJECT_NEXT_RATIO;
 	MatchData ret;
 	auto source = feats.at(i),
-			 target = feats.at(j);
+		target = feats.at(j);
 	auto& t = trees[j];
 
 	float* buf = new float[source.size() * D];

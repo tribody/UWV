@@ -29,7 +29,8 @@ Mat32f CylinderStitcher::build() {
 	return perspective_correction(ret);
 }
 
-void CylinderStitcher::build_warp() {;
+void CylinderStitcher::build_warp() {
+	;
 	GuardedTimer tm("build_warp()");
 	int n = imgs.size(), mid = bundle.identity_idx;
 	REP(i, n) bundle.component[i].homo = Homography::I();
@@ -37,7 +38,7 @@ void CylinderStitcher::build_warp() {;
 	Timer timer;
 	vector<MatchData> matches;		// matches[k]: k,k+1
 	PairWiseMatcher pwmatcher(feats);
-	matches.resize(n-1);
+	matches.resize(n - 1);
 #pragma omp parallel for schedule(dynamic)
 	REP(k, n - 1)
 		matches[k] = pwmatcher.match(k, (k + 1) % n);
@@ -77,11 +78,11 @@ void CylinderStitcher::build_warp() {;
 		matches[i].reverse();
 		MatchInfo info;
 		bool succ = TransformEstimation(
-				matches[i], keypoints[i + 1], keypoints[i],
-				imgs[i+1].shape(), imgs[i].shape()).get_transform(&info);
+			matches[i], keypoints[i + 1], keypoints[i],
+			imgs[i + 1].shape(), imgs[i].shape()).get_transform(&info);
 		// Can match before, but not here. This would be a bug.
-		if (! succ)
-			error_exit(ssprintf("Failed to match between image %d and %d.", i, i+1));
+		if (!succ)
+			error_exit(ssprintf("Failed to match between image %d and %d.", i, i + 1));
 		// homo: operate on half-shifted coor
 		bundle.component[i].homo = info.homo;
 	}
@@ -175,7 +176,8 @@ Mat32f CylinderStitcher::perspective_correction(const Mat32f& img) {
 	Homography inv(m);
 
 	LinearBlender blender;
-	ImageRef tmp("this_should_not_be_used");
+	Mat32f tmp_mat{};
+	ImageRef tmp(tmp_mat);
 	tmp.img = new Mat32f(img);
 	tmp._width = img.width(), tmp._height = img.height();
 	blender.add_image(

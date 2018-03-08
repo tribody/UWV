@@ -11,14 +11,14 @@
 namespace pano {
 		// A transparent reference to a image in file
 		struct ImageRef {
-			std::string fname;
+			Mat32f fname_2_mat32f; /* 此处修改stitcher */
 			Mat32f* img = nullptr;
 			int _width, _height;
 
 			void load() {
 				if (img) return;
 				/* 此处修改stitcher */
-				img = new Mat32f{read_img(fname.c_str())};
+				img = new Mat32f{ fname_2_mat32f };
 				_width = img->width();
 				_height = img->height();
 			}
@@ -29,7 +29,7 @@ namespace pano {
 			int height() const { return _height; }
 			Shape2D shape() const { return {_width, _height}; }
 
-			ImageRef(const std::string& fname): fname(fname) {}
+			ImageRef(const Mat32f& fname_2_mat32f): fname_2_mat32f(fname_2_mat32f) {}
 
 			~ImageRef() { if (img) delete img; }
 		};

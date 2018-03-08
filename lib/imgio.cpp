@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <vector>
 #define cimg_display 0
-#define cimg_use_jpeg
+// #define cimg_use_jpeg // 此处修改 不使用JPEG库
 #include "CImg.h"
 
 #include "imgproc.h"

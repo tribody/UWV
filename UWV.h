@@ -70,7 +70,6 @@ typedef short int			int16;
 #include "feature/extrema.h"
 #include "feature/matcher.h"
 #include "feature/orientation.h"
-#include "lib/mat.h"
 #include "lib/config.h"
 #include "lib/geometry.h"
 #include "lib/imgproc.h"
@@ -86,7 +85,6 @@ typedef short int			int16;
 #include <cassert>
 
 #include "imgproc.h"
-#include "feature/matcher.h"
 #include "stitch/blender.h"
 #define PLG_IN
 
@@ -277,7 +275,7 @@ typedef struct {
 
 // 声明UWV中的函数
 static PF_Err
-MatToEw(PF_InData *in_data, Mat32f &imgMat, PF_EffectWorld *imgE);
+MatToEw(PF_InData *in_data, Mat32f *imgMat, PF_EffectWorld *imgE);
 
 static PF_Err
 EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat);

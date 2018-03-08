@@ -30,8 +30,8 @@ vector<Descriptor> FeatureDetector::detect_feature(const Mat32f& img) const {
 // return [0, 1] coordinate
 vector<Descriptor> SIFTDetector::do_detect_feature(const Mat32f& mat) const {
 	// perform sift at this resolution
-	float ratio = SIFT_WORKING_SIZE * 2.0f / (mat.width() + mat.height());
-	Mat32f resized(mat.rows() * ratio, mat.cols() * ratio, 3);
+	float ratio = SIFT_WORKING_SIZE * 2.0f / (float)(mat.width() + mat.height());
+	Mat32f resized(mat.rows() * ratio, mat.cols() * ratio, mat.channels()); // channel -> 4 ???
 	resize(mat, resized);
 
 	ScaleSpace ss(resized, NUM_OCTAVE, NUM_SCALE);

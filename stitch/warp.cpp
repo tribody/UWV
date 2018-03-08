@@ -43,8 +43,8 @@ Mat32f CylinderProject::project(const Mat32f& img, vector<Vec2D>& pts) const {
 
 	Mat32f mat0(shape.h, shape.w, 3);
 	fill(mat0, Color::NO);
-	write_rgb("mat.jpg", mat0); //Debug Here
-	write_rgb("mat.jpg", mat); //Debug Here
+	// write_rgb("mat.jpg", mat0); //Debug Here // NO DEBUG HERE
+	// write_rgb("mat.jpg", mat); //Debug Here // NO DEBUG HERE
 	return mat;
 }
 

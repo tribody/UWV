@@ -99,13 +99,13 @@
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">.aex</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>D:\opencv\opencv2.4.3\build\include;D:\opencv\opencv2.4.3\build\include\opencv;D:\opencv\opencv2.4.3\build\include\opencv2;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\opencv\opencv2.4.3\build\x64\vc10\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\flann;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\stitch;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\feature;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)</LibraryPath>
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>D:\opencv\opencv2.4.3\build\include;D:\opencv\opencv2.4.3\build\include\opencv;D:\opencv\opencv2.4.3\build\include\opencv2;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;D:\opencv\opencv2.4.3\build\x64\vc10\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
@@ -136,7 +136,7 @@
       <TreatWarningAsError>false</TreatWarningAsError>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <CompileAs>Default</CompileAs>
+      <CompileAs>CompileAsCpp</CompileAs>
       <SDLCheck>true</SDLCheck>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <OmitFramePointers>false</OmitFramePointers>
@@ -159,8 +159,9 @@
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <DataExecutionPrevention>true</DataExecutionPrevention>
       <ImportLibrary>$(IntDir)/$(TargetName).lib</ImportLibrary>
-      <AdditionalDependencies>opencv_calib3d243.lib;opencv_contrib243.lib;opencv_core243.lib;opencv_features2d243.lib;opencv_flann243.lib;opencv_gpu243.lib;opencv_haartraining_engine.lib;opencv_highgui243.lib;opencv_imgproc243.lib;opencv_legacy243.lib;opencv_ml243.lib;opencv_nonfree243.lib;opencv_objdetect243.lib;opencv_photo243.lib;opencv_stitching243.lib;opencv_ts243.lib;opencv_video243.lib;opencv_videostab243.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <TargetMachine>MachineX64</TargetMachine>
     </Link>
     <Bscmake>
       <OutputFile>$(IntDir)$(TargetName).bsc</OutputFile>
@@ -236,10 +237,10 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\Eigen;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;..\..\..\Headers;..\..\..\Headers\SP;..\..\..\Headers\Win;..\..\..\Resources;..\..\..\Util;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\Eigen;..\..\..\Headers;..\..\..\Headers\SP;..\..\..\Resources;..\..\..\Util;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>MSWindows;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <StructMemberAlignment>4Bytes</StructMemberAlignment>
+      <StructMemberAlignment>Default</StructMemberAlignment>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -250,11 +251,17 @@
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(IntDir)vc$(PlatformToolsetVersion).pdb</ProgramDataBaseFileName>
       <BrowseInformation>true</BrowseInformation>
-      <WarningLevel>TurnOffAllWarnings</WarningLevel>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <WarningLevel>Level3</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <CompileAs>Default</CompileAs>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <OpenMPSupport>true</OpenMPSupport>
+      <SDLCheck>true</SDLCheck>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -268,12 +275,12 @@
       <ProgramDatabaseFile>$(IntDir)$(TargetName).pdb</ProgramDatabaseFile>
       <SubSystem>
       </SubSystem>
-      <RandomizedBaseAddress>false</RandomizedBaseAddress>
-      <DataExecutionPrevention>
-      </DataExecutionPrevention>
+      <RandomizedBaseAddress>true</RandomizedBaseAddress>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
       <ImportLibrary>$(IntDir)/$(TargetName).lib</ImportLibrary>
       <TargetMachine>MachineX86</TargetMachine>
-      <AdditionalLibraryDirectories>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImageHasSafeExceptionHandlers />
     </Link>
     <Bscmake>
       <OutputFile>$(IntDir)$(TargetName).bsc</OutputFile>
@@ -366,6 +373,24 @@ cl /D "MSWindows" /EP $(IntDir)%(Filename).rrc &gt;               "$(ProjectDir)
     <ResourceCompile Include="UWVPiPL.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\feature\dist.h" />
+    <ClInclude Include="..\stitch\blender.h" />
+    <ClInclude Include="..\stitch\camera.h" />
+    <ClInclude Include="..\stitch\camera_estimator.h" />
+    <ClInclude Include="..\stitch\cylstitcher.h" />
+    <ClInclude Include="..\stitch\homography.h" />
+    <ClInclude Include="..\stitch\imageref.h" />
+    <ClInclude Include="..\stitch\incremental_bundle_adjuster.h" />
+    <ClInclude Include="..\stitch\mat.h" />
+    <ClInclude Include="..\stitch\match_info.h" />
+    <ClInclude Include="..\stitch\multiband.h" />
+    <ClInclude Include="..\stitch\projection.h" />
+    <ClInclude Include="..\stitch\stitcher.h" />
+    <ClInclude Include="..\stitch\stitcherbase.h" />
+    <ClInclude Include="..\stitch\stitcher_image.h" />
+    <ClInclude Include="..\stitch\transform_estimate.h" />
+    <ClInclude Include="..\stitch\warp.h" />
+    <ClInclude Include="..\third-party\flann\flann.hpp" />
     <ClInclude Include="..\UWV.h" />
     <ClInclude Include="..\UWV_Strings.h" />
     <ClInclude Include="..\..\..\Headers\A.h" />
@@ -390,6 +415,40 @@ cl /D "MSWindows" /EP $(IntDir)%(Filename).rrc &gt;               "$(ProjectDir)
   <ItemGroup>
     <ClCompile Include="..\..\..\Util\AEGP_SuiteHandler.cpp" />
     <ClCompile Include="..\..\..\Util\MissingSuiteError.cpp" />
+    <ClCompile Include="..\feature\brief.cpp" />
+    <ClCompile Include="..\feature\dist.cpp" />
+    <ClCompile Include="..\feature\dog.cpp" />
+    <ClCompile Include="..\feature\extrema.cpp" />
+    <ClCompile Include="..\feature\feature.cpp" />
+    <ClCompile Include="..\feature\gaussian.cpp" />
+    <ClCompile Include="..\feature\matcher.cpp" />
+    <ClCompile Include="..\feature\orientation.cpp" />
+    <ClCompile Include="..\feature\sift.cpp" />
+    <ClCompile Include="..\lib\color.cpp" />
+    <ClCompile Include="..\lib\config.cpp" />
+    <ClCompile Include="..\lib\debugutils.cpp" />
+    <ClCompile Include="..\lib\imgio.cpp" />
+    <ClCompile Include="..\lib\imgproc.cpp" />
+    <ClCompile Include="..\lib\kdtree.cpp" />
+    <ClCompile Include="..\lib\matrix.cpp" />
+    <ClCompile Include="..\lib\planedrawer.cpp" />
+    <ClCompile Include="..\lib\polygon.cpp" />
+    <ClCompile Include="..\lib\timer.cpp" />
+    <ClCompile Include="..\lib\utils.cpp" />
+    <ClCompile Include="..\stitch\blender.cpp" />
+    <ClCompile Include="..\stitch\camera.cpp" />
+    <ClCompile Include="..\stitch\camera_estimator.cpp" />
+    <ClCompile Include="..\stitch\cylstitcher.cpp" />
+    <ClCompile Include="..\stitch\debug.cpp" />
+    <ClCompile Include="..\stitch\homography.cpp" />
+    <ClCompile Include="..\stitch\incremental_bundle_adjuster.cpp" />
+    <ClCompile Include="..\stitch\multiband.cpp" />
+    <ClCompile Include="..\stitch\stitcher.cpp" />
+    <ClCompile Include="..\stitch\stitcherbase.cpp" />
+    <ClCompile Include="..\stitch\stitcher_image.cpp" />
+    <ClCompile Include="..\stitch\transform_estimate.cpp" />
+    <ClCompile Include="..\stitch\warp.cpp" />
+    <ClCompile Include="..\third-party\lodepng\lodepng.cpp" />
     <ClCompile Include="..\UWV.cpp" />
     <ClCompile Include="..\UWV_Strings.cpp" />
   </ItemGroup>

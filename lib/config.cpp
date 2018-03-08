@@ -35,51 +35,51 @@ float ConfigParser::get(const std::string& s) {
 	return data[s];
 }
 
-bool CYLINDER;
-bool TRANS;
-bool CROP;
-float FOCAL_LENGTH;
-bool ESTIMATE_CAMERA;
-bool STRAIGHTEN;
-int MAX_OUTPUT_SIZE;
-bool ORDERED_INPUT;
-bool LAZY_READ;
+// here confirm the config PARAS
+bool CYLINDER = false;
+bool TRANS = false;
+bool CROP = true;
+float FOCAL_LENGTH = 37;
+bool ESTIMATE_CAMERA = true;
+bool STRAIGHTEN = true;
+int MAX_OUTPUT_SIZE = 8000;
+bool ORDERED_INPUT = false;
+bool LAZY_READ = true;
 
-int MULTIPASS_BA;
-float LM_LAMBDA;
+int SIFT_WORKING_SIZE = 800;
+int NUM_OCTAVE = 3;
+int NUM_SCALE = 7;
+float SCALE_FACTOR = 1.4142135623;
 
-int SIFT_WORKING_SIZE;
-int NUM_OCTAVE;
-int NUM_SCALE;
-float SCALE_FACTOR;
+float GAUSS_SIGMA = 1.4142135623;
+int GAUSS_WINDOW_FACTOR = 4;
 
-float GAUSS_SIGMA;
-int GAUSS_WINDOW_FACTOR;
+float JUDGE_EXTREMA_DIFF_THRES = 2e-3;
+float CONTRAST_THRES = 3e-2;
+float PRE_COLOR_THRES = 5e-2;
+float EDGE_RATIO = 10;
 
-float JUDGE_EXTREMA_DIFF_THRES;
-float CONTRAST_THRES;
-float PRE_COLOR_THRES;
-float EDGE_RATIO;
+int CALC_OFFSET_DEPTH = 4;
+float OFFSET_THRES = 0.5;
 
-int CALC_OFFSET_DEPTH;
-float OFFSET_THRES;
+float ORI_RADIUS = 4.5;
+int ORI_HIST_SMOOTH_COUNT = 2;
 
-float ORI_RADIUS;
+int DESC_HIST_SCALE_FACTOR = 3;
+int DESC_INT_FACTOR = 512;
 
-int ORI_HIST_SMOOTH_COUNT;
+float MATCH_REJECT_NEXT_RATIO = 0.8;
 
-int DESC_HIST_SCALE_FACTOR;
-int DESC_INT_FACTOR;
+int RANSAC_ITERATIONS = 1500;
+double RANSAC_INLIER_THRES = 3.5;
+float INLIER_IN_MATCH_RATIO = 0.1;
+float INLIER_IN_POINTS_RATIO = 0.04;
 
-float MATCH_REJECT_NEXT_RATIO;
+float SLOPE_PLAIN = 8e-3;
 
-int RANSAC_ITERATIONS;
-double RANSAC_INLIER_THRES;
-float INLIER_IN_MATCH_RATIO;
-float INLIER_IN_POINTS_RATIO;
+int MULTIPASS_BA = 1;
+float LM_LAMBDA = 5;
 
-float SLOPE_PLAIN;
-
-int MULTIBAND;
+int MULTIBAND = 0;
 
 }
