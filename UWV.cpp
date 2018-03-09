@@ -58,11 +58,13 @@ std::vector<PF_EffectWorld *>src_imgs( 12, NULL );
 
 static float focal_length = UWV_ESTIMATION_DFLT;
 
-static bool correct_order_flag = FALSE,
-            correcting_order_flag = FALSE,
+static bool flag_correct_order = FALSE,
+            flag_correcting_order = FALSE,
             flag_calc_homog = false,
-            cal_success = false,
-			mosaic_flag = false;
+            flag_calc_success = false,
+	        flag_h_can_mosaic = false,
+	        flag_can_render = false,
+			flag_pre_mosaic = false;
 
 static int proj_method = UWV_METHOD_DFLT;
 
@@ -72,13 +74,14 @@ static int first_click_img;
 static int second_click_img;
 static std::vector<PF_EffectWorld **> imgs_prt{&srcL, &srcM, &srcR};
 static PF_EffectWorld *dest_back_layer; // background image
-static bool ordering_done = false;
+static bool flag_ordering_done = false;
 static std::vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
 static std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
 static std::vector<bool>flag_which_imported(12, false); // use for mark which view have been imported
 static int flag_now_imported; // use for mark which view is being imported 
 static Mat32f mat_result_img;
+//extern CylinderStitcher h_calc_img_blend_er; // use 'extern' for splitting statement and definition
 
 
 
@@ -411,20 +414,34 @@ ParamsSetup (
 		AEFX_AUDIO_DEFAULT_CURVE_TOLERANCE,
 		UWV_ESTIMATION_DFLT,
 		UWV_ESTIMATION_PREC,
-		0, 1,
+		0,
+		1,
 		FOCAL_ID);
 
 	AEFX_CLR_STRUCT(def);
-	PF_ADD_BUTTON(STR(StrID_Homography), "Calculate", 0,
-		PF_ParamFlag_SUPERVISE, HOMOGRAPHY_ID);
+	PF_ADD_BUTTON(STR(StrID_Homography),
+		"Calculate",
+		0,
+		PF_ParamFlag_SUPERVISE,
+		HOMOGRAPHY_ID);
 
 	AEFX_CLR_STRUCT(def);
-	PF_ADD_BUTTON(STR(StrID_Mosaic), "Stitch",
+	PF_ADD_BUTTON(STR(StrID_Mosaic),
+		"Stitch",
 		PF_PUI_DISABLED,
 		PF_ParamFlag_SUPERVISE,
 		MOSAIC_ID);
 
 	AEFX_CLR_STRUCT(def);
+	def.flags |= PF_ParamFlag_SUPERVISE;
+	PF_ADD_CHECKBOX(STR(StrID_Render),
+		STR(StrID_Render),
+		FALSE,
+		0,
+		RENDER_ID);
+
+	AEFX_CLR_STRUCT(def);
+	def.flags |= PF_ParamFlag_SUPERVISE;
 	PF_ADD_CHECKBOX(STR(StrID_Preview),
 		STR(StrID_Preview),
 		TRUE,
@@ -512,6 +529,8 @@ MakeParamCopy(
 	copy[UWV_FOCAL] = *actual[UWV_FOCAL];
 	copy[UWV_HOMOGRAPHY] = *actual[UWV_HOMOGRAPHY];
 	copy[UWV_MOSAIC] = *actual[UWV_MOSAIC];
+	copy[UWV_RENDER] = *actual[UWV_RENDER];
+	copy[UWV_PREVIEW] = *actual[UWV_PREVIEW];
 	return PF_Err_NONE;
 }
 
@@ -588,8 +607,12 @@ UserChangedParam(
 		break;
 
 	case UWV_MOSAIC:
-		mosaic_flag = true;
+		flag_pre_mosaic = true;
 		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
+		break;
+
+	case UWV_RENDER:
+		flag_can_render = params[UWV_RENDER]->u.bd.value;
 		break;
 	}
 	return err;
@@ -613,15 +636,11 @@ UpdateParameterUI(
 		&& (param_copy[PERCENTAGE_BEG_ID].flags & PF_ParamFlag_COLLAPSE_TWIRLY)
 		&& (param_copy[FRAME_SHIFT_BEG_ID].flags & PF_ParamFlag_COLLAPSE_TWIRLY)
 		&& (param_copy[STITCH_BEG_ID].flags & PF_ParamFlag_COLLAPSE_TWIRLY)) {
+
 		param_copy[IMPORT_BEG_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		param_copy[PERCENTAGE_BEG_ID].flags		&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		param_copy[FRAME_SHIFT_BEG_ID].flags	&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		param_copy[STITCH_BEG_ID].flags			&= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-
-		// auto expand RATIO_1 and FRAME_SHIFT_1
-		param_copy[UWV_PERCENTAGE_RATIO_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-		param_copy[UWV_FRAME_SHIFT_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
-
 		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
 			IMPORT_BEG_ID,
 			&param_copy[IMPORT_BEG_ID]));
@@ -636,6 +655,8 @@ UpdateParameterUI(
 			&param_copy[STITCH_BEG_ID]));
 		
 		// auto expand RATIO_1 and FRAME_SHIFT_1
+		param_copy[UWV_PERCENTAGE_RATIO_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
+		param_copy[UWV_FRAME_SHIFT_1].flags &= ~PF_ParamFlag_COLLAPSE_TWIRLY;
 		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
 			UWV_PERCENTAGE_RATIO_1_ID,
 			&param_copy[UWV_PERCENTAGE_RATIO_1_ID]));
@@ -656,8 +677,17 @@ UpdateParameterUI(
 			UWV_FOCAL,
 			&param_copy[UWV_FOCAL]));
 	}
+
+	// enable 'stitch' button
+	if (flag_h_can_mosaic) {
+		// H已计算 允许拼接
+		param_copy[UWV_MOSAIC].ui_flags &= ~PF_PUI_DISABLED;
+		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
+			UWV_MOSAIC,
+			&param_copy[UWV_MOSAIC]));
+	}
 	
-return		err;
+	return err;
 }
 
 static PF_Err
@@ -760,19 +790,16 @@ Render (
 			if (src_imgs[i] != NULL) {
 				PF_Rect destArea = { i*mesh_width, mesh_height_1, (i + 1)*mesh_width, output->height - mesh_height_1 };
 				PF_COPY(src_imgs[i], output, NULL, &destArea);
-				ordering_done = false; // 将调序后的输出渲染完，重置
+				flag_ordering_done = false; // 将调序后的输出渲染完，重置
 			}
 		}
 	}
 
 
 	/*
-	 * TODO
-	 * 1、参数预设
-	 * 2、参数更新
-	 * 3、图像拼接
+	1. 计算单应
+	2. 拼接、渲染图片
 	 */
-
 
 	if (proj_method == 1) {	// 1 means default project method PLANAR
 		// initial the planar stitcher
@@ -781,13 +808,13 @@ Render (
 		// initial the cylinder stitcher
 	}
 
-	// do the h calculation
-	if (flag_calc_homog) {
+	// do the H calculation
+	if (flag_calc_homog && (!flag_can_render)) {
 
 		// 计算单应前，在此作数据转换
 		// Mat32f mat_one_img(src_imgs[0]->height, src_imgs[0]->width, 3); // !!! mat32f数据结构：（height, witdth, channels） // no need
 	    vector<Mat32f> mat_imgs;
-		// cal_success = CalHomoInKeyFrame(matL, matM, matR);
+		// flag_calc_success = CalHomoInKeyFrame(matL, matM, matR);
 		// stick stitcher.project here
 		/* cal the H once */
 		for (i = 0; i < num_selected_imgs; i++) {
@@ -795,9 +822,11 @@ Render (
 			// 图片格式转换
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
-		CylinderStitcher h_calc_er(move(mat_imgs));
-		mat_result_img = h_calc_er.only_build_homog();
-		if(1)cal_success=true;
+		static CylinderStitcher h_calc_img_blend_er(move(mat_imgs));
+		mat_result_img = h_calc_img_blend_er.only_build_homog();
+		if (1) {
+			flag_calc_success = true;
+		}
 		mat_result_img = crop(mat_result_img);
 		
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
@@ -808,51 +837,63 @@ Render (
 		PF_COPY(ew_result_img, output, NULL, NULL);
 
 
-		if (cal_success) {
-			cal_success = false;
-			params[UWV_MOSAIC]->ui_flags &= ~PF_PUI_DISABLED; // 允许 拼接
-			PF_STRCPY(out_data->return_msg, "H matrix calculation finished!");
+		if (flag_calc_success) {
+			flag_h_can_mosaic = true;
+			flag_calc_success = false;
+			PF_STRCPY(out_data->return_msg, "H matrix calculation SUCCEEDED!");
 			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
 		} else {
-			PF_STRCPY(out_data->return_msg, "H matrix calculation failed!");
+			PF_STRCPY(out_data->return_msg, "H matrix calculation FAILED!");
 			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
 		}
 		flag_calc_homog = false;
+		OutputDebugString("Now Calc Homog");
 	}
 
-	// do the stitch work
-	if (mosaic_flag) {
-		/*
-
-		// vector<Mat32f> mat_imgs;
-		// cal_success = CalHomoInKeyFrame(matL, matM, matR);
-		// stick stitcher.project here
-		// cal the H once
+	// do the pre-stitch work
+	if (flag_pre_mosaic && flag_h_can_mosaic && (!flag_can_render)) {
+		vector<Mat32f> mat_imgs;
 		for (i = 0; i < num_selected_imgs; i++) {
 			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
 			// 图片格式转换
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
 
-		output_stitcher(move(mat_imgs)); 
-		auto ret_2 = output_stitcher.bundle.blend();
-		mat_result_img = perspective_correction(ret_2);
+		static CylinderStitcher h_calc_img_blend_er(move(mat_imgs));
+		mat_result_img = h_calc_img_blend_er.only_render();
 		mat_result_img = crop(mat_result_img);
 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		//PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+		PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
-		mat_result_img.m_data = NULL;
-		PF_COPY(ew_result_img, output, NULL, NULL); // 测试 debug
-
-		// PF_STRCPY(out_data->return_msg, "Stitched finished!");
-		// out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
-
-		*/
+		PF_COPY(ew_result_img, output, NULL, NULL); 
+		flag_pre_mosaic = false;
+		OutputDebugString("Now Pre-Mosaic");
 	}
 
+	// final output here
+	if (flag_can_render) {
+		vector<Mat32f> mat_imgs;
+		for (i = 0; i < num_selected_imgs; i++) {
+			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
+			// 图片格式转换
+			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
+		}
+
+		static CylinderStitcher h_calc_img_blend_er(move(mat_imgs));
+		mat_result_img = h_calc_img_blend_er.only_render();
+		mat_result_img = crop(mat_result_img);
+
+		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
+		PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
+
+		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
+		PF_COPY(ew_result_img, output, NULL, NULL);
+		OutputDebugString("Now Can Render");
+	}
 
 	return err;
 }

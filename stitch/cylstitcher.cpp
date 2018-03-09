@@ -18,8 +18,14 @@ using namespace std;
 
 namespace pano {
 
-Mat32f CylinderStitcher::only_render() {
+void CylinderStitcher::change_imgsref(std::vector<Mat32f>& mat_imgs) {
 	// bundle.component[0].imgptr // ²Ù×÷/Ìæ»» ±»blendµÄÍ¼Æ¬
+	for (int k = 0; k < imgs.size(); k++) {
+		imgs[k].change_imgref(mat_imgs[k]);
+	}
+}
+
+Mat32f CylinderStitcher::only_render() {
 	auto ret = bundle.blend();
 	return perspective_correction(ret);
 }

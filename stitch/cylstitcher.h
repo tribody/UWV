@@ -38,6 +38,7 @@ class CylinderStitcher : public StitcherBase {
 			}
 
 		virtual Mat32f only_build_homog();
+		virtual void change_imgsref(std::vector<Mat32f>&);
 		Mat32f only_render(); // add a only_render function
 };
 

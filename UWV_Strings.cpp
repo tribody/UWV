@@ -87,9 +87,10 @@ TableString		g_strs[StrID_NUMTYPES] = {
 	StrID_Projection,				"Projection Plane",
 	StrID_Projection_Type,			"Planar projection|""Cylindrical projection",
 	StrID_Focal_Lenghth,			"Focal lenghth",
-	StrID_Homography,				"Click to calculate the homography",
+	StrID_Homography,				"Click to Calculate the Homography",
+	StrID_Mosaic,					"Click to Pre-Stitch the Videos",
+	StrID_Render,					"Can Render",
 	StrID_Preview,					"Preview",
-	StrID_Mosaic,					"Click to mosaic the videos",
 };
 
 

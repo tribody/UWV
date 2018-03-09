@@ -45,7 +45,7 @@ bool ESTIMATE_CAMERA = true;
 bool STRAIGHTEN = true;
 int MAX_OUTPUT_SIZE = 12000;
 bool ORDERED_INPUT = true;
-bool LAZY_READ = false;
+bool LAZY_READ = true;// 以便后期更换图片
 
 int SIFT_WORKING_SIZE = 800;
 int NUM_OCTAVE = 3;

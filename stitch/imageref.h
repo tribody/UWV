@@ -22,6 +22,11 @@ namespace pano {
 				_width = img->width();
 				_height = img->height();
 			}
+			void change_imgref(const Mat32f& mat_insert) {
+				img = new Mat32f{ mat_insert };
+				_width = img->width();
+				_height = img->height();
+			}
 
 			void release() { if (img) delete img; img = nullptr; }
 
