@@ -101,7 +101,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\flann;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\stitch;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\feature;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(IncludePath)</IncludePath>
     <LibraryPath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)</LibraryPath>
-    <LinkIncremental>true</LinkIncremental>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <IncludePath>D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(IncludePath)</IncludePath>
@@ -140,8 +140,8 @@
       <SDLCheck>true</SDLCheck>
       <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
       <OmitFramePointers>false</OmitFramePointers>
-      <MinimalRebuild>true</MinimalRebuild>
-      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <ResourceCompile>
@@ -162,12 +162,14 @@
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <TargetMachine>MachineX64</TargetMachine>
+      <NoEntryPoint>false</NoEntryPoint>
     </Link>
     <Bscmake>
       <OutputFile>$(IntDir)$(TargetName).bsc</OutputFile>
     </Bscmake>
     <ProjectReference>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>true</UseLibraryDependencyInputs>
     </ProjectReference>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

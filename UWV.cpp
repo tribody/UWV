@@ -59,12 +59,13 @@ std::vector<PF_EffectWorld *>src_imgs( 12, NULL );
 static float focal_length = UWV_ESTIMATION_DFLT;
 
 static bool flag_correct_order = FALSE,
-            flag_correcting_order = FALSE,
-            flag_calc_homog = false,
-            flag_calc_success = false,
-	        flag_h_can_mosaic = false,
-	        flag_can_render = false,
-			flag_pre_mosaic = false;
+			flag_correcting_order = FALSE,
+			flag_calc_homog = false,
+			flag_calc_success = false,
+			flag_h_can_mosaic = false,
+			flag_can_render = false,
+			flag_pre_mosaic = false,
+			flag_def_CylinderStitcher = false;
 
 static int proj_method = UWV_METHOD_DFLT;
 
@@ -81,7 +82,7 @@ static std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 static std::vector<bool>flag_which_imported(12, false); // use for mark which view have been imported
 static int flag_now_imported; // use for mark which view is being imported 
 static Mat32f mat_result_img;
-//extern CylinderStitcher h_calc_img_blend_er; // use 'extern' for splitting statement and definition
+static CylinderStitcher* h_calc_blend_er_ptr; // 完美的全局方式，通过flag_def_CylinderStitcher控制只生成一个CylinderStitcher
 
 
 
@@ -780,8 +781,8 @@ Render (
 		PF_CHECKIN_PARAM(in_data, &checkout);
 	}
 
-	// 拼合当前预览图
-	if (num_selected_imgs  != 0) {
+	// 拼合当前预览图(未准备渲染时)
+	if ((num_selected_imgs != 0) && (!flag_can_render)) {
 		out_data->width = (in_data->width) / 4; // ??
 		out_data->height = (in_data->height) / 4; // ??
 		mesh_width = (output->width) / num_selected_imgs; // 拼接的view的数目
@@ -814,16 +815,18 @@ Render (
 		// 计算单应前，在此作数据转换
 		// Mat32f mat_one_img(src_imgs[0]->height, src_imgs[0]->width, 3); // !!! mat32f数据结构：（height, witdth, channels） // no need
 	    vector<Mat32f> mat_imgs;
-		// flag_calc_success = CalHomoInKeyFrame(matL, matM, matR);
-		// stick stitcher.project here
 		/* cal the H once */
 		for (i = 0; i < num_selected_imgs; i++) {
 			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
 			// 图片格式转换
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
-		static CylinderStitcher h_calc_img_blend_er(move(mat_imgs));
-		mat_result_img = h_calc_img_blend_er.only_build_homog();
+			
+		if (!flag_def_CylinderStitcher) {
+			flag_def_CylinderStitcher = true;
+			h_calc_blend_er_ptr = new CylinderStitcher(move(mat_imgs));
+		}
+		mat_result_img = h_calc_blend_er_ptr->only_build_homog();
 		if (1) {
 			flag_calc_success = true;
 		}
@@ -859,8 +862,8 @@ Render (
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
 
-		static CylinderStitcher h_calc_img_blend_er(move(mat_imgs));
-		mat_result_img = h_calc_img_blend_er.only_render();
+		h_calc_blend_er_ptr->change_imgsref(mat_imgs);
+		mat_result_img = h_calc_blend_er_ptr->only_render();
 		mat_result_img = crop(mat_result_img);
 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
@@ -882,8 +885,8 @@ Render (
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
 
-		static CylinderStitcher h_calc_img_blend_er(move(mat_imgs));
-		mat_result_img = h_calc_img_blend_er.only_render();
+		h_calc_blend_er_ptr->change_imgsref(mat_imgs);
+		mat_result_img = h_calc_blend_er_ptr->only_render();
 		mat_result_img = crop(mat_result_img);
 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
