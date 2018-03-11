@@ -82,7 +82,7 @@ static std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 static std::vector<bool>flag_which_imported(12, false); // use for mark which view have been imported
 static int flag_now_imported; // use for mark which view is being imported 
 static Mat32f mat_result_img;
-static CylinderStitcher* h_calc_blend_er_ptr; // 完美的全局方式，通过flag_def_CylinderStitcher控制只生成一个CylinderStitcher
+static CylinderStitcher* h_calc_blend_er_ptr = NULL; // 完美的全局方式，通过flag_def_CylinderStitcher控制只生成一个CylinderStitcher
 
 
 
@@ -429,7 +429,7 @@ ParamsSetup (
 	AEFX_CLR_STRUCT(def);
 	PF_ADD_BUTTON(STR(StrID_Mosaic),
 		"Stitch",
-		PF_PUI_DISABLED,
+		0,
 		PF_ParamFlag_SUPERVISE,
 		MOSAIC_ID);
 
@@ -822,10 +822,10 @@ Render (
 			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 		}
 			
-		if (!flag_def_CylinderStitcher) {
-			flag_def_CylinderStitcher = true;
-			h_calc_blend_er_ptr = new CylinderStitcher(move(mat_imgs));
+		if (h_calc_blend_er_ptr) {
+			delete h_calc_blend_er_ptr;
 		}
+		h_calc_blend_er_ptr = new CylinderStitcher(move(mat_imgs));
 		mat_result_img = h_calc_blend_er_ptr->only_build_homog();
 		if (1) {
 			flag_calc_success = true;
@@ -855,29 +855,34 @@ Render (
 
 	// do the pre-stitch work
 	if (flag_pre_mosaic && flag_h_can_mosaic && (!flag_can_render)) {
-		vector<Mat32f> mat_imgs;
-		for (i = 0; i < num_selected_imgs; i++) {
-			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
-			// 图片格式转换
-			ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
+		if (!h_calc_blend_er_ptr) {
+			PF_STRCPY(out_data->return_msg, "Should Calculate H first!");
+			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
+		}else{
+			vector<Mat32f> mat_imgs;
+			for (i = 0; i < num_selected_imgs; i++) {
+				mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
+				// 图片格式转换
+				ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
+			}
+
+			h_calc_blend_er_ptr->change_imgsref(mat_imgs);
+			mat_result_img = h_calc_blend_er_ptr->only_render();
+			mat_result_img = crop(mat_result_img);
+
+			ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
+			PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+			ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
+
+			ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
+			PF_COPY(ew_result_img, output, NULL, NULL); 
+			flag_pre_mosaic = false;
+			OutputDebugString("Now Pre-Mosaic");
 		}
-
-		h_calc_blend_er_ptr->change_imgsref(mat_imgs);
-		mat_result_img = h_calc_blend_er_ptr->only_render();
-		mat_result_img = crop(mat_result_img);
-
-		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
-
-		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
-		PF_COPY(ew_result_img, output, NULL, NULL); 
-		flag_pre_mosaic = false;
-		OutputDebugString("Now Pre-Mosaic");
 	}
 
 	// final output here
-	if (flag_can_render) {
+	if (flag_can_render && h_calc_blend_er_ptr) {
 		vector<Mat32f> mat_imgs;
 		for (i = 0; i < num_selected_imgs; i++) {
 			mat_imgs.emplace_back(src_imgs[0]->height, src_imgs[0]->width, 3);
