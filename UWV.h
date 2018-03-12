@@ -185,8 +185,6 @@ enum {
 	UWV_PROJECTION_METHOD,
 	UWV_FOCAL,
 	UWV_HOMOGRAPHY,
-	//UWV_MOSAIC,
-	UWV_RENDER,
 	UWV_SETTINGS_END,
 
 	UWV_NUM_PARAMS
@@ -248,18 +246,18 @@ enum {
 	METHOD_ID,
 	FOCAL_ID,
 	HOMOGRAPHY_ID,
-	//MOSAIC_ID,
-	RENDER_ID,
 	STITCH_END_ID,
 };
 
 /* custom struct */
 typedef struct{
-	A_long* frame_calc_h; // selected cunrrent time
+	A_long* frame_calc_h_ptr; // selected cunrrent time
+	A_Boolean* flag_h_clac_for_render_ptr;
 } mySequenceData;
 
 typedef struct {
 	A_long flat_frame_calc_h; // selected cunrrent time
+	A_Boolean flat_flag_h_clac_for_render;
 } flatSequenceData;
 
 #ifdef __cplusplus

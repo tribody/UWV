@@ -58,7 +58,7 @@ class StitcherBase {
 		StitcherBase(const StitcherBase&) = delete;
 		StitcherBase& operator = (const StitcherBase&) = delete;
 
-		virtual Mat32f only_build_homog() = 0;
+		virtual void only_build_homog() = 0;
 		virtual void change_imgsref(std::vector<Mat32f>&) = 0;
 
 		virtual ~StitcherBase() = default;

@@ -30,15 +30,15 @@ Mat32f CylinderStitcher::only_render() {
 	return perspective_correction(ret);
 }
 
-Mat32f CylinderStitcher::only_build_homog() {
+void CylinderStitcher::only_build_homog() {
 	calc_feature();
 	bundle.identity_idx = imgs.size() >> 1;
 	build_warp();
 	free_feature();
 	bundle.proj_method = ConnectedImages::ProjectionMethod::flat;
 	bundle.update_proj_range();
-	auto ret = bundle.blend();
-	return perspective_correction(ret);
+	//auto ret = bundle.blend();
+	//return perspective_correction(ret);
 }
 
 void CylinderStitcher::build_warp() {

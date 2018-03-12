@@ -64,8 +64,7 @@ flag_calc_homog = false,
 flag_calc_success = false,
 flag_h_can_mosaic = false,
 flag_can_render = false,
-//flag_pre_mosaic = false,
-flag_final_render_h_calced = false;
+flag_calc_h_once = false;
 
 int UWV_proj_method = UWV_METHOD_DFLT;
 
@@ -79,7 +78,7 @@ bool flag_ordering_done = false;
 std::vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
 std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
-Mat32f mat_result_img;
+Mat32f* mat_result_img_ptr;
 CylinderStitcher* h_calc_blend_er_ptr = NULL; // 全局方式：1. 控制在AE中预览的时候只存在一个CylinderStitcher；2. 在真正render的时候，重新保持另一个CylinderStitcher
 A_long key_frame_calc_h;
 
@@ -126,17 +125,6 @@ GlobalSetup (
 	// honor the collapse ability of each parameters group
 	out_data->out_flags2 = PF_OutFlag2_PARAM_GROUP_START_COLLAPSED_FLAG;
 
-	I_L2M = new PF_FloatMatrix;
-	I_L2M->mat[0][0] = I_L2M->mat[1][1] = I_L2M->mat[2][2] = 1;
-
-	I_R2M = new PF_FloatMatrix;
-	I_R2M->mat[0][0] = I_R2M->mat[1][1] = I_R2M->mat[2][2] = 1;
-
-	Homo_L2M = new PF_FloatMatrix;
-	Homo_L2M->mat[0][0] = Homo_L2M->mat[1][1] = Homo_L2M->mat[2][2] = 1;
-
-	Homo_R2M = new PF_FloatMatrix;
-	Homo_R2M->mat[0][0] = Homo_R2M->mat[1][1] = Homo_R2M->mat[2][2] = 1;
 	return PF_Err_NONE;
 }
 
@@ -147,11 +135,6 @@ GlobalSetdown(
 	PF_ParamDef		*params[],
 	PF_LayerDef		*output)
 {
-	delete I_L2M;
-	delete I_R2M;
-	delete Homo_L2M;
-	delete Homo_R2M;
-
 	return PF_Err_NONE;
 }
 
@@ -174,9 +157,11 @@ SequenceSetup(
 
 	mySD_P = *(mySequenceData**)out_data->sequence_data;
 
-	mySD_P->frame_calc_h = new A_long;
+	mySD_P->frame_calc_h_ptr = new A_long;
+	mySD_P->flag_h_clac_for_render_ptr = new A_Boolean;
 	
-	*(mySD_P->frame_calc_h) = 1;
+	*(mySD_P->frame_calc_h_ptr) = 1;
+	*(mySD_P->flag_h_clac_for_render_ptr) = false;
 
 	return PF_Err_NONE;
 }
@@ -190,7 +175,8 @@ SequenceSetdown(
 {
 	if (in_data->sequence_data) {
 		mySequenceData *mySD_P = *(mySequenceData**)out_data->sequence_data;
-		delete mySD_P->frame_calc_h;
+		delete mySD_P->frame_calc_h_ptr;
+		delete mySD_P->flag_h_clac_for_render_ptr;
 		PF_DISPOSE_HANDLE(in_data->sequence_data);
 		out_data->sequence_data = NULL;
 	}
@@ -217,7 +203,8 @@ SequenceFlatten(
 
 				if (flatSD_P) {
 					AEFX_CLR_STRUCT(*flatSD_P);
-					flatSD_P->flat_frame_calc_h = *(mySD_P->frame_calc_h);
+					flatSD_P->flat_frame_calc_h = *(mySD_P->frame_calc_h_ptr);
+					flatSD_P->flat_flag_h_clac_for_render = *(mySD_P->flag_h_clac_for_render_ptr);
 
 					suites.HandleSuite1()->host_dispose_handle(in_data->sequence_data);
 					out_data->sequence_data = flat_seq_dataH;
@@ -263,9 +250,11 @@ SequenceResetup(
 
 				if (mySD_P) {
 					AEFX_CLR_STRUCT(*mySD_P);
-					mySD_P->frame_calc_h = new A_long;
+					mySD_P->frame_calc_h_ptr = new A_long;
+					mySD_P->flag_h_clac_for_render_ptr = new A_Boolean;
 
-					*(mySD_P->frame_calc_h) = flatSD_P->flat_frame_calc_h;
+					*(mySD_P->frame_calc_h_ptr) = flatSD_P->flat_frame_calc_h;
+					*(mySD_P->flag_h_clac_for_render_ptr) = flatSD_P->flat_flag_h_clac_for_render;
 
 					out_data->sequence_data = unflat_seq_dataH;
 					suites.HandleSuite1()->host_unlock_handle(unflat_seq_dataH);
@@ -377,21 +366,6 @@ ParamsSetup (
 		PF_ParamFlag_SUPERVISE,
 		HOMOGRAPHY_ID);
 
-	//AEFX_CLR_STRUCT(def);
-	//PF_ADD_BUTTON(STR(StrID_Mosaic),
-	//	"Pre-Stitch",
-	//	0,
-	//	PF_ParamFlag_SUPERVISE,
-	//	MOSAIC_ID);
-
-	AEFX_CLR_STRUCT(def);
-	def.flags |= PF_ParamFlag_SUPERVISE;
-	PF_ADD_CHECKBOX(STR(StrID_Render),
-		STR(StrID_Render),
-		FALSE,
-		0,
-		RENDER_ID);
-
 	AEFX_CLR_STRUCT(def);
 	PF_END_TOPIC(STITCH_END_ID);
 
@@ -472,8 +446,6 @@ MakeParamCopy(
 	copy[UWV_PROJECTION_METHOD] = *actual[UWV_PROJECTION_METHOD];
 	copy[UWV_FOCAL] = *actual[UWV_FOCAL];
 	copy[UWV_HOMOGRAPHY] = *actual[UWV_HOMOGRAPHY];
-	//copy[UWV_MOSAIC] = *actual[UWV_MOSAIC];
-	copy[UWV_RENDER] = *actual[UWV_RENDER];
 	return PF_Err_NONE;
 }
 
@@ -551,17 +523,6 @@ UserChangedParam(
 		}
 		break;
 
-	//case UWV_MOSAIC:
-	//	if (!flag_can_render)
-	//	{
-	//		flag_pre_mosaic = true;
-	//		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
-	//	}
-	//	break;
-
-	case UWV_RENDER:
-		// get parameters in render() function
-		break;
 	}
 	return err;
 }
@@ -743,11 +704,10 @@ Render (
 	}
 
 	// 2. Get set parameters
-	flag_can_render = params[UWV_RENDER]->u.bd.value;
 	// from sequence data
 	mySequenceData* mySD_P = NULL;
-	mySD_P = *(mySequenceData**)out_data->sequence_data; // then use the '*(mySD_P->frame_calc_h)' to visit the key_frame_calc_h
-
+	mySD_P = *(mySequenceData**)out_data->sequence_data; // then use the '*(mySD_P->frame_calc_h_ptr)' to visit the key_frame_calc_h
+	//A_Boolean flag_h_clac_for_render = *(mySD_P->flag_h_clac_for_render_ptr);
 
 
 	/*
@@ -757,131 +717,105 @@ Render (
 	3. do the pre-stitch work
 	*/
 	// 1. current imported views
-	if (num_selected_imgs && (!flag_can_render)) {
+	if (num_selected_imgs) {
 		out_data->width = (in_data->width) / 4; // ??
 		out_data->height = (in_data->height) / 4; // ??
 		mesh_width = (output->width) / num_selected_imgs; // 拼接的view的数目
 		mesh_height_1 = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
+		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
+		PF_EffectWorld* ew_selected_view = new  PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, output->width, output->height, 1, format, (ew_selected_view)));
+		PF_COPY(output, ew_selected_view, NULL, NULL);
 		for (i = 0; i < num_selected_imgs; i++) {
 			if (src_imgs[i] != NULL) {
 				PF_Rect destArea = { i*mesh_width, mesh_height_1, (i + 1)*mesh_width, output->height - mesh_height_1 };
-				PF_COPY(src_imgs[i], output, NULL, &destArea);
+				PF_COPY(src_imgs[i], ew_selected_view, NULL, &destArea);
 				flag_ordering_done = false; // 将调序后的输出渲染完，重置。（未使用）
 			}
 		}
+		if(!mat_result_img_ptr)mat_result_img_ptr = new Mat32f(output->height, output->width, 3);
+		ERR(EwToMat(in_data, ew_selected_view, *mat_result_img_ptr));
 	}
 
-	// 2. do the H calculation
-	if (flag_calc_homog && num_selected_imgs && (!flag_can_render)) {
-		flag_final_render_h_calced = false; // re-calc H for re-do-rendering
-		if (h_calc_blend_er_ptr) {
-			delete h_calc_blend_er_ptr; // 当重新计算H，即重新选择关键帧时
-		}
-		key_frame_calc_h = (in_data->current_time + frame_shifts[i] * in_data->time_step); // 记录（之后会序列化）选来计算的帧
-		h_calc_blend_er_ptr = new CylinderStitcher(move(mat_imgs));
-		mat_result_img = h_calc_blend_er_ptr->only_build_homog();
-		if (1) { // Todo: verify if H calc-ed successfully
-			flag_calc_success = true;
-		}
-		mat_result_img = crop(mat_result_img);
-		
-		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		PF_EffectWorld* ew_result_img  = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
 
-		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
-		PF_COPY(ew_result_img, output, NULL, NULL);
-		// delete ew_result_img;
 
-		if (flag_calc_success) {
-			flag_h_can_mosaic = true;
-			flag_calc_success = false;
-			PF_STRCPY(out_data->return_msg, "H matrix calculation SUCCEEDED!");
-			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
-		} else {
-			PF_STRCPY(out_data->return_msg, "H matrix calculation FAILED!");
-			out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
-		}
-		flag_calc_homog = false;
-		OutputDebugString("Now Calc Homog");
+	/*
+	<2>. Calc H once
+	*/
+	if (flag_calc_homog && (num_selected_imgs > 1))
+	{
+		flag_calc_h_once = false;
+
+		// 准备序列化：preview render之后，若对当前的H（由key_frame_calc_h计算出）满意，保存项目时会序列化
+		*(mySD_P->frame_calc_h_ptr) = (in_data->current_time + frame_shifts[i] * in_data->time_step); // 记录（之后会序列化）选来计算的帧
 	}
-
-	// 3. do the pre-stitch work
-	//if (flag_pre_mosaic && flag_h_can_mosaic && num_selected_imgs && (!flag_can_render)) {
-	//	flag_final_render_h_calced = false; // re-calc H for re-do-rendering
-	//	if (!h_calc_blend_er_ptr) {
-	//		PF_STRCPY(out_data->return_msg, "Should Calculate H first!");
-	//		out_data->out_flags |= PF_OutFlag_DISPLAY_ERROR_MESSAGE;
-	//	}else{
-	//		h_calc_blend_er_ptr->change_imgsref(mat_imgs);
-	//		mat_result_img = h_calc_blend_er_ptr->only_render();
-	//		mat_result_img = crop(mat_result_img);
-
-	//		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-	//		PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
-	//		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
-
-	//		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
-	//		PF_COPY(ew_result_img, output, NULL, NULL); 
-	//		flag_pre_mosaic = false;
-	//		OutputDebugString("Now Pre-Mosaic");
-	//	}
-	//}
 
 
 
 	/*
 	<3>. Use parameters to Finally Stitch every frames in AE or AME
 	*/
-	if (flag_can_render && (!flag_calc_homog) &&  num_selected_imgs) { // (!flag_pre_mosaic) &&
-		if (!flag_final_render_h_calced)
-		{
-			flag_final_render_h_calced = true;
-			// 准备序列化：preview render之后，若对当前的H（由key_frame_calc_h计算出）满意，保存项目时会序列化
-			*(mySD_P->frame_calc_h) = key_frame_calc_h;
-			// get key_frame data and calc H
-			if (h_calc_blend_er_ptr)delete h_calc_blend_er_ptr; // 当真正开始render时
-			num_selected_imgs = 0;
-			for (i = 0; i<12; i++)
-			{
-				// Get Parameters
-				frame_shifts[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value;
-				lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
+	if (!flag_calc_h_once && (num_selected_imgs > 1)) {
+		flag_calc_h_once = true;
 
-				// get images
-				PF_CHECKOUT_PARAM(in_data,
-					(i + 2),
-					(*(mySD_P->frame_calc_h)), // selected frame(by the 'current_time')
-					in_data->time_step,
-					in_data->time_scale,
-					&checkout);
-				if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
-					ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
-					src_imgs[i] = new  PF_EffectWorld;
-					ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
-					PF_COPY(&checkout.u.ld,
-						src_imgs[i],
-						NULL,
-						NULL);
-					num_selected_imgs = num_selected_imgs + 1;
-				}
-				PF_CHECKIN_PARAM(in_data, &checkout);
+		int i;
+		int num_selected_imgs = 0;
+		std::vector<PF_EffectWorld *>key_src_imgs(12, NULL);
+		// loop every selecting action, little bit low efficient
+		for (i = 0; i<12; i++)
+		{
+			// Get Parameters
+			frame_shifts[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value;
+			lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
+
+			// get images
+			PF_CHECKOUT_PARAM(in_data,
+				(i + 2),
+				(in_data->current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
+				in_data->time_step,
+				in_data->time_scale,
+				&checkout);
+			if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
+				ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
+				key_src_imgs[i] = new  PF_EffectWorld;
+				ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (key_src_imgs[i])));
+				PF_COPY(&checkout.u.ld,
+					key_src_imgs[i],
+					NULL,
+					NULL);
+				num_selected_imgs = num_selected_imgs + 1;
+				// 预览图各子图的大小
+				src_width = key_src_imgs[i]->width;
+				src_height = key_src_imgs[i]->height;
 			}
-			h_calc_blend_er_ptr = new CylinderStitcher(move(mat_imgs));
-			mat_result_img = h_calc_blend_er_ptr->only_build_homog();
+			PF_CHECKIN_PARAM(in_data, &checkout);
+		}
+		// 图片格式转换
+		vector<Mat32f> key_mat_imgs;
+		for (i = 0; i < num_selected_imgs; i++) {
+			key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3);
+			ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
 		}
 
-		h_calc_blend_er_ptr->change_imgsref(mat_imgs);
-		mat_result_img = h_calc_blend_er_ptr->only_render();
-		mat_result_img = crop(mat_result_img);
+		h_calc_blend_er_ptr = new CylinderStitcher(move(key_mat_imgs));
+		h_calc_blend_er_ptr->only_build_homog();
+	}
 
+	if (h_calc_blend_er_ptr)
+	{
+		h_calc_blend_er_ptr->change_imgsref(mat_imgs);
+		*mat_result_img_ptr = h_calc_blend_er_ptr->only_render();
+		*mat_result_img_ptr = crop(*mat_result_img_ptr);
+	}
+
+	if(num_selected_imgs)
+	{ 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
 		PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, mat_result_img.width(), mat_result_img.height(), 1, format, (ew_result_img)));
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
-		ERR(MatToEw(in_data, &(mat_result_img), ew_result_img));
+		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
 		PF_COPY(ew_result_img, output, NULL, NULL);
-		OutputDebugString("Now Can Render");
 	}
 
 	return err;
