@@ -42,7 +42,6 @@ Mat32f CylinderStitcher::only_build_homog() {
 }
 
 void CylinderStitcher::build_warp() {
-	;
 	GuardedTimer tm("build_warp()");
 	int n = imgs.size(), mid = bundle.identity_idx;
 	REP(i, n) bundle.component[i].homo = Homography::I();

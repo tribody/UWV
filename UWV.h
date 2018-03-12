@@ -122,11 +122,6 @@ using namespace config;
 #define UWV_METHOD_NUM			2	
 #define	UWV_METHOD_DFLT		1
 
-/* Parameter defaults */
-// Configures
-
-
-
 /* 这里决定了控件在ParamenterUI上的位置（下标） */
 /* 这里的两个枚举是一一对应的，都是某个控件的位置（下标） */
 enum {
@@ -190,9 +185,8 @@ enum {
 	UWV_PROJECTION_METHOD,
 	UWV_FOCAL,
 	UWV_HOMOGRAPHY,
-	UWV_MOSAIC,
+	//UWV_MOSAIC,
 	UWV_RENDER,
-	UWV_PREVIEW,
 	UWV_SETTINGS_END,
 
 	UWV_NUM_PARAMS
@@ -254,21 +248,18 @@ enum {
 	METHOD_ID,
 	FOCAL_ID,
 	HOMOGRAPHY_ID,
-	MOSAIC_ID,
+	//MOSAIC_ID,
 	RENDER_ID,
-	PREVIEW_ID,
 	STITCH_END_ID,
 };
 
 /* custom struct */
 typedef struct{
-	PF_FloatMatrix *Homo_L;
-	PF_FloatMatrix *Homo_R;
+	A_long* frame_calc_h; // selected cunrrent time
 } mySequenceData;
 
 typedef struct {
-	double L2M[9];
-	double R2M[9];
+	A_long flat_frame_calc_h; // selected cunrrent time
 } flatSequenceData;
 
 #ifdef __cplusplus

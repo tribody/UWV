@@ -1,13 +1,13 @@
-$(AE_PLUGIN_BUILD_DIR)\UWV\
+输出目录：$(AE_PLUGIN_BUILD_DIR)\UWV\
 
-D:\Adobe\AE\Adobe After Effects CC 2014\Support Files\AfterFX.exe
+调试目录：D:\Adobe\AE\Adobe After Effects CC 2014\Support Files\AfterFX.exe
 
-D:\opencv\opencv2.4.3\build\include;D:\opencv\opencv2.4.3\build\include\opencv;D:\opencv\opencv2.4.3\build\include\opencv2;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;$(IncludePath)
+包含目录D:\opencv\opencv2.4.3\build\include;D:\opencv\opencv2.4.3\build\include\opencv;D:\opencv\opencv2.4.3\build\include\opencv2;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;$(IncludePath)
 
-D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;D:\opencv\opencv2.4.3\build\x64\vc10\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)
+库目录：D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;D:\opencv\opencv2.4.3\build\x64\vc10\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)
 
-D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\Eigen;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;..\..\..\Headers;..\..\..\Headers\SP;..\..\..\Resources;..\..\..\Util;%(AdditionalIncludeDirectories)
+附加包含目录：D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\Eigen;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;..\..\..\Headers;..\..\..\Headers\SP;..\..\..\Resources;..\..\..\Util;%(AdditionalIncludeDirectories)
 
-D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;%(AdditionalLibraryDirectories)
+附加依赖项：%(AdditionalLibraryDirectories)
 
 

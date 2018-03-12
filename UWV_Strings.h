@@ -81,9 +81,8 @@ typedef enum {
 	StrID_Projection_Type,
 	StrID_Focal_Lenghth,
 	StrID_Homography,	//Calculate homography
-	StrID_Mosaic,		//Stitch the video
+	//StrID_Mosaic,		//Stitch the video
 	StrID_Render,
-	StrID_Preview,
 
 	StrID_NUMTYPES
 } StrIDType;
