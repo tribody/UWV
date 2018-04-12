@@ -88,6 +88,7 @@ TableString		g_strs[StrID_NUMTYPES] = {
 	StrID_Projection_Type,			"Planar projection|""Cylindrical projection",
 	StrID_Focal_Lenghth,			"Focal lenghth",
 	StrID_Homography,				"Click to Calculate the Homography",
+	StrID_Render,				    "Check for Render",
 };
 
 

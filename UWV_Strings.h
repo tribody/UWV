@@ -81,6 +81,7 @@ typedef enum {
 	StrID_Projection_Type,
 	StrID_Focal_Lenghth,
 	StrID_Homography,	//Calculate homography
+	StrID_Render,
 
 	StrID_NUMTYPES
 } StrIDType;
