@@ -444,6 +444,7 @@ MakeParamCopy(
 	copy[UWV_PROJECTION_METHOD] = *actual[UWV_PROJECTION_METHOD];
 	copy[UWV_FOCAL] = *actual[UWV_FOCAL];
 	copy[UWV_HOMOGRAPHY] = *actual[UWV_HOMOGRAPHY];
+	copy[UWV_RENDER] = *actual[UWV_RENDER];
 	return PF_Err_NONE;
 }
 
@@ -592,6 +593,8 @@ UpdateParameterUI(
 
 static PF_Err
 EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
+	PF_Err err = PF_Err_NONE;
+
 	int w = imgE->width,
 		h = imgE->height,
 		rb = imgE->rowbytes; // 每次步进，下一像素
@@ -613,6 +616,8 @@ EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
 
 static PF_Err
 MatToEw(PF_InData *in_data, Mat32f *imgMat, PF_EffectWorld *imgE) {
+	PF_Err err = PF_Err_NONE;
+
 	int w = imgMat->cols(),
 		h = imgMat->rows(),
 		rb = imgE->rowbytes;
@@ -628,6 +633,55 @@ MatToEw(PF_InData *in_data, Mat32f *imgMat, PF_EffectWorld *imgE) {
 			pixelP[x].alpha = 255;//imgMat.at(y, x, 3);
 		}
 		pixelP = (PF_Pixel8*)((char*)pixelP + rb);
+	}
+	return PF_Err_NONE;
+}
+
+static PF_Err
+GetSrcImgs(PF_InData		*in_data,
+	PF_OutData		*out_data,
+	PF_ParamDef		*params[],
+	PF_LayerDef		*output,
+	vector<PF_EffectWorld *> &src_imgs,//测试vector的传参方式
+	int &num_selected_imgs,
+	PF_PixelFormat &format,
+	A_long selected_current_time)
+{
+	PF_Err err = PF_Err_NONE;
+
+	AEGP_SuiteHandler suites(in_data->pica_basicP);
+	PF_WorldSuite2 *wsP = NULL;
+	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
+
+	int i;
+	// loop every selecting action, little bit low efficient
+	for (i = 0; i < 12; i++)
+	{
+		// Get Parameters
+		frame_shifts[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value;
+		lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
+
+		// get images
+		PF_CHECKOUT_PARAM(in_data,
+			(i + 2),
+			(selected_current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
+			in_data->time_step,
+			in_data->time_scale,
+			&checkout);
+		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
+			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
+			src_imgs[i] = new  PF_EffectWorld;
+			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
+			PF_COPY(&checkout.u.ld,
+				src_imgs[i],
+				NULL,
+				NULL);
+			num_selected_imgs = num_selected_imgs + 1;
+			// 预览图各子图的大小
+			src_width = src_imgs[i]->width;
+			src_height = src_imgs[i]->height;
+		}
+		PF_CHECKIN_PARAM(in_data, &checkout);
 	}
 	return PF_Err_NONE;
 }
@@ -653,8 +707,8 @@ Render (
 	// 获取AE工具套件
 	AEGP_SuiteHandler suites(in_data->pica_basicP);
 	PF_WorldSuite2 *wsP = NULL;
-	PF_PixelFormat format;
 	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
+	PF_PixelFormat format;
 
 	/* 
 	<1>. Get Parameters:
@@ -668,34 +722,7 @@ Render (
 	int i;
 	int num_selected_imgs = 0;
 	// loop every selecting action, little bit low efficient
-	for(i=0; i<12; i++)
-	{
-		// Get Parameters
-		frame_shifts[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value;
-		lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
-
-		// get images
-		PF_CHECKOUT_PARAM(in_data,
-			(i+2),
-			(in_data->current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
-			in_data->time_step,
-			in_data->time_scale,
-			&checkout);
-		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
-			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
-			src_imgs[i] = new  PF_EffectWorld;
-			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
-			PF_COPY(&checkout.u.ld,
-				src_imgs[i],
-				NULL,
-				NULL);
-			num_selected_imgs = num_selected_imgs  + 1;
-			// 预览图各子图的大小
-			src_width = src_imgs[i]->width;
-			src_height = src_imgs[i]->height;
-		}
-		PF_CHECKIN_PARAM(in_data, &checkout);
-	}
+	GetSrcImgs(in_data, out_data, params, output, src_imgs, num_selected_imgs, format, in_data->current_time);
 	// 图片格式转换
 	vector<Mat32f> mat_imgs;
 	for (i = 0; i < num_selected_imgs; i++) {
@@ -716,6 +743,8 @@ Render (
 	2. do the H calculation(in fact: just selected key-frame, by sequencing the selected 'current_time') !!!
 	3. do the pre-stitch work
 	*/
+	// 公用同一个ew_result_img来显示结果：imported，calc H，can_render
+	PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 	// 1. current imported views
 	if (num_selected_imgs) {
 		out_data->width = (in_data->width) / 4; // ??
@@ -732,18 +761,27 @@ Render (
 				PF_COPY(src_imgs[i], ew_selected_view, NULL, &destArea);
 			}
 		}
-		if (!mat_result_img_ptr)mat_result_img_ptr = new Mat32f(output->height, output->width, 3);
+		// 注意：render会对mat_result_img_ptr赋值，很可能会改变其size，所以在此重置
+		if (mat_result_img_ptr)
+		{
+			delete mat_result_img_ptr;
+		}
+		mat_result_img_ptr = new Mat32f(output->height, output->width, 3); 
 		ERR(EwToMat(in_data, ew_selected_view, *mat_result_img_ptr));
+		if (ew_selected_view)
+		{
+			delete ew_selected_view;
+		}
 
 		// show current imported views
 		if (!flag_check_render)
 		{
 			ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-			PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 			ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 			ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
 			PF_COPY(ew_result_img, output, NULL, NULL);
+
 	    }
 	}
 
@@ -754,7 +792,7 @@ Render (
 	*/
 	if (flag_calc_homog && (num_selected_imgs > 1)) 
 	{
-		flag_calc_homog = false;
+		//flag_calc_homog = false;
 		if (!flag_check_render)
 		{
 			// 准备序列化：preview render之后，若对当前的H（由key_frame_calc_h计算出）满意，保存项目时会序列化
@@ -821,7 +859,7 @@ Render (
 			}
 
 			ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-			PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+			//PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 			ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 			ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
@@ -889,12 +927,19 @@ Render (
 		}
 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+		//PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
 		PF_COPY(ew_result_img, output, NULL, NULL);
 	}
+
+	if (ew_result_img)
+	{
+		delete ew_result_img;
+	}
+	// 为了表示此次点击是使能flag_calc_homog，最后再置零
+	if (flag_calc_homog) flag_calc_homog = false;
 
 	return err;
 }
