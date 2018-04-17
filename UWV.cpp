@@ -68,6 +68,8 @@ PF_EffectWorld *dest_back_layer; // background image
 std::vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
 std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
+// 公用同一个ew_result_img来显示结果：imported，calc H，can_render
+PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 Mat32f* mat_result_img_ptr;
 CylinderStitcher* h_calc_blender_ptr = NULL; // 全局方式：1. 控制在AE中预览的时候只存在一个CylinderStitcher；2. 在真正render的时候，重新保持另一个CylinderStitcher
 A_long key_frame_calc_h;
@@ -654,6 +656,7 @@ GetSrcImgs(PF_InData		*in_data,
 	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
 
 	int i;
+	A_long checkout_frame;
 	// loop every selecting action, little bit low efficient
 	for (i = 0; i < 12; i++)
 	{
@@ -662,13 +665,14 @@ GetSrcImgs(PF_InData		*in_data,
 		lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
 
 		// get images
+		checkout_frame = (selected_current_time + frame_shifts[i] * in_data->time_step);
 		PF_CHECKOUT_PARAM(in_data,
 			(i + 2),
-			(selected_current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
+			checkout_frame, //+ff_left*in_data->time_step, 
 			in_data->time_step,
 			in_data->time_scale,
 			&checkout);
-		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
+		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != out_data->width)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为输出的宽度）
 			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
 			src_imgs[i] = new  PF_EffectWorld;
 			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
@@ -684,6 +688,12 @@ GetSrcImgs(PF_InData		*in_data,
 		PF_CHECKIN_PARAM(in_data, &checkout);
 	}
 	return PF_Err_NONE;
+}
+
+static PF_Err
+CropImg()
+{
+	;
 }
 
 static PF_Err 
@@ -710,6 +720,7 @@ Render (
 	ERR(suites.Pica()->AcquireSuite(kPFWorldSuite, kPFWorldSuiteVersion2, (const void**)&wsP));
 	PF_PixelFormat format;
 
+
 	/* 
 	<1>. Get Parameters:
 	1. current frame datas
@@ -730,11 +741,18 @@ Render (
 		ERR(EwToMat(in_data, (src_imgs[i]), (mat_imgs[i])));
 	}
 
+	// 注意：render会对mat_result_img_ptr赋值，很可能会改变其size，所以在此重置
+	if (mat_result_img_ptr)
+	{
+		delete mat_result_img_ptr;
+	}
+	mat_result_img_ptr = new Mat32f(output->height, output->width, 3);
+	PF_Rect destArea;
+
 	// 2. Get set parameters
 	// from sequence data
 	mySequenceData* mySD_P = NULL;
 	mySD_P = *(mySequenceData**)out_data->sequence_data; // then use the '*(mySD_P->frame_calc_h_ptr)' to visit the key_frame_calc_h
-	//A_Boolean flag_h_clac_for_render = *(mySD_P->flag_h_clac_for_render_ptr);
 
 
 	/*
@@ -743,10 +761,9 @@ Render (
 	2. do the H calculation(in fact: just selected key-frame, by sequencing the selected 'current_time') !!!
 	3. do the pre-stitch work
 	*/
-	// 公用同一个ew_result_img来显示结果：imported，calc H，can_render
-	PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+	
 	// 1. current imported views
-	if (num_selected_imgs) {
+	if (num_selected_imgs && !flag_check_render) {
 		out_data->width = (in_data->width) / 4; // ??
 		out_data->height = (in_data->height) / 4; // ??
 		mesh_width = (output->width) / num_selected_imgs; // 拼接的view的数目
@@ -757,32 +774,16 @@ Render (
 		PF_COPY(output, ew_selected_view, NULL, NULL);
 		for (i = 0; i < num_selected_imgs; i++) {
 			if (src_imgs[i] != NULL) {
-				PF_Rect destArea = { i*mesh_width, mesh_height_1, (i + 1)*mesh_width, output->height - mesh_height_1 };
+				destArea = { i*mesh_width, mesh_height_1, (i + 1)*mesh_width, output->height - mesh_height_1 };
 				PF_COPY(src_imgs[i], ew_selected_view, NULL, &destArea);
 			}
 		}
-		// 注意：render会对mat_result_img_ptr赋值，很可能会改变其size，所以在此重置
-		if (mat_result_img_ptr)
-		{
-			delete mat_result_img_ptr;
-		}
-		mat_result_img_ptr = new Mat32f(output->height, output->width, 3); 
-		ERR(EwToMat(in_data, ew_selected_view, *mat_result_img_ptr));
+		// show current imported views
+		PF_COPY(ew_selected_view, output, NULL, NULL);
 		if (ew_selected_view)
 		{
 			delete ew_selected_view;
 		}
-
-		// show current imported views
-		if (!flag_check_render)
-		{
-			ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-			ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
-
-			ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-			PF_COPY(ew_result_img, output, NULL, NULL);
-
-	    }
 	}
 
 
@@ -790,81 +791,43 @@ Render (
 	/*
 	<2>. Calc H once
 	*/
-	if (flag_calc_homog && (num_selected_imgs > 1)) 
+	if (flag_calc_homog && (num_selected_imgs > 1) && (!flag_check_render))
 	{
-		//flag_calc_homog = false;
-		if (!flag_check_render)
+		// 准备序列化：preview render之后，若对当前的H（由key_frame_calc_h计算出）满意，保存项目时会序列化
+		*(mySD_P->frame_calc_h_ptr) = (in_data->current_time); // 记录（之后会序列化）选来计算的帧
+
+		// 初始化CylinderStitcher
+		if (flag_single_CylinderStitcher)
 		{
-			// 准备序列化：preview render之后，若对当前的H（由key_frame_calc_h计算出）满意，保存项目时会序列化
-			if ((in_data->current_time + frame_shifts[i] * in_data->time_step) >= 0) {
-				*(mySD_P->frame_calc_h_ptr) = (in_data->current_time + frame_shifts[i] * in_data->time_step); // 记录（之后会序列化）选来计算的帧
-			}
-			else {
-				*(mySD_P->frame_calc_h_ptr) = 0;
-			}
-
-			// 初始化CylinderStitcher
-			if (flag_single_CylinderStitcher)
-			{
-				flag_single_CylinderStitcher = false;
-				int i;
-				int num_selected_imgs = 0;
-				std::vector<PF_EffectWorld *>key_src_imgs(12, NULL);
-				// loop every selecting action, little bit low efficient
-				for (i = 0; i<12; i++)
-				{
-					// Get Parameters
-					frame_shifts[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value;
-					lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
-
-					// get images
-					PF_CHECKOUT_PARAM(in_data,
-						(i + 2),
-						(in_data->current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
-						in_data->time_step,
-						in_data->time_scale,
-						&checkout);
-					if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
-						ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
-						key_src_imgs[i] = new  PF_EffectWorld;
-						ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (key_src_imgs[i])));
-						PF_COPY(&checkout.u.ld,
-							key_src_imgs[i],
-							NULL,
-							NULL);
-						num_selected_imgs = num_selected_imgs + 1;
-						// 预览图各子图的大小
-						src_width = key_src_imgs[i]->width;
-						src_height = key_src_imgs[i]->height;
-					}
-					PF_CHECKIN_PARAM(in_data, &checkout);
-				}
-				// 图片格式转换
-				vector<Mat32f> key_mat_imgs;
-				for (i = 0; i < num_selected_imgs; i++) {
-					key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3);
-					ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
-				}
-
-				h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
-				h_calc_blender_ptr->only_build_homog();
+			flag_single_CylinderStitcher = false;
+			num_selected_imgs = 0;
+			std::vector<PF_EffectWorld *>key_src_imgs(12, NULL);
+			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr));
+			// 图片格式转换
+			vector<Mat32f> key_mat_imgs;
+			for (i = 0; i < num_selected_imgs; i++) {
+				key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3);
+				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
 			}
 
-			// 使用CylinderStitcher进行H计算
-			if (h_calc_blender_ptr)
-			{
-				h_calc_blender_ptr->change_imgsref(mat_imgs);
-				*mat_result_img_ptr = h_calc_blender_ptr->only_render();
-				*mat_result_img_ptr = crop(*mat_result_img_ptr);
-			}
-
-			ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-			//PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
-			ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
-
-			ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-			PF_COPY(ew_result_img, output, NULL, NULL);
+			h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
+			h_calc_blender_ptr->only_build_homog();
 		}
+
+		// 使用CylinderStitcher进行H计算
+		if (h_calc_blender_ptr)
+		{
+			h_calc_blender_ptr->change_imgsref(mat_imgs);
+			*mat_result_img_ptr = h_calc_blender_ptr->only_render();
+			*mat_result_img_ptr = crop(*mat_result_img_ptr);
+		}
+
+		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
+
+		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
+		destArea = {((output->width - ew_result_img->width)>>1), ((output->height - ew_result_img->height) >> 1), (output->width - ((output->width - ew_result_img->width) >> 1)), (output->height - ((output->height - ew_result_img->height) >> 1)) };
+		PF_COPY(ew_result_img, output, NULL, &destArea);
 	}
 
 
@@ -876,38 +839,10 @@ Render (
 		if (flag_single_CylinderStitcher)
 		{
 			flag_single_CylinderStitcher = false;
-			int i;
-			int num_selected_imgs = 0;
+			num_selected_imgs = 0;
 			std::vector<PF_EffectWorld *>key_src_imgs(12, NULL);
 			// loop every selecting action, little bit low efficient
-			for (i = 0; i<12; i++)
-			{
-				// Get Parameters
-				frame_shifts[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value;
-				lapped_ratios[i] = params[UWV_FRAME_SHIFT_1 + i]->u.sd.value / 100.f;
-
-				// get images
-				PF_CHECKOUT_PARAM(in_data,
-					(i + 2),
-					(in_data->current_time + frame_shifts[i] * in_data->time_step),//+ff_left*in_data->time_step, 
-					in_data->time_step,
-					in_data->time_scale,
-					&checkout);
-				if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != 4096)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为4096）
-					ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
-					key_src_imgs[i] = new  PF_EffectWorld;
-					ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (key_src_imgs[i])));
-					PF_COPY(&checkout.u.ld,
-						key_src_imgs[i],
-						NULL,
-						NULL);
-					num_selected_imgs = num_selected_imgs + 1;
-					// 预览图各子图的大小
-					src_width = key_src_imgs[i]->width;
-					src_height = key_src_imgs[i]->height;
-				}
-				PF_CHECKIN_PARAM(in_data, &checkout);
-			}
+			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr));
 			// 图片格式转换
 			vector<Mat32f> key_mat_imgs;
 			for (i = 0; i < num_selected_imgs; i++) {
@@ -927,17 +862,13 @@ Render (
 		}
 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		//PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-		PF_COPY(ew_result_img, output, NULL, NULL);
+		destArea = { ((output->width - ew_result_img->width) >> 1), ((output->height - ew_result_img->height) >> 1), (output->width - ((output->width - ew_result_img->width) >> 1)), (output->height - ((output->height - ew_result_img->height) >> 1)) };
+		PF_COPY(ew_result_img, output, NULL, &destArea);
 	}
 
-	if (ew_result_img)
-	{
-		delete ew_result_img;
-	}
 	// 为了表示此次点击是使能flag_calc_homog，最后再置零
 	if (flag_calc_homog) flag_calc_homog = false;
 
