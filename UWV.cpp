@@ -666,13 +666,14 @@ GetSrcImgs(PF_InData		*in_data,
 
 		// get images
 		checkout_frame = (selected_current_time + frame_shifts[i] * in_data->time_step);
+		if (checkout_frame < 0)checkout_frame = 0; // 避免越界
 		PF_CHECKOUT_PARAM(in_data,
 			(i + 2),
 			checkout_frame, //+ff_left*in_data->time_step, 
 			in_data->time_step,
 			in_data->time_scale,
 			&checkout);
-		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != out_data->width)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为输出的宽度）
+		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != output->width)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为输出的宽度）
 			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
 			src_imgs[i] = new  PF_EffectWorld;
 			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
@@ -826,7 +827,11 @@ Render (
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-		destArea = {((output->width - ew_result_img->width)>>1), ((output->height - ew_result_img->height) >> 1), (output->width - ((output->width - ew_result_img->width) >> 1)), (output->height - ((output->height - ew_result_img->height) >> 1)) };
+		A_long left_edge = ((output->width - ew_result_img->width) >> 1);
+		A_long top_edge = ((output->height - ew_result_img->height) >> 1);
+		A_long right_edge = (output->width - ((output->width - ew_result_img->width) >> 1));
+		A_long bottom_edge = (output->height - ((output->height - ew_result_img->height) >> 1));
+		destArea = { left_edge, top_edge, right_edge, bottom_edge};
 		PF_COPY(ew_result_img, output, NULL, &destArea);
 	}
 
@@ -865,7 +870,11 @@ Render (
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-		destArea = { ((output->width - ew_result_img->width) >> 1), ((output->height - ew_result_img->height) >> 1), (output->width - ((output->width - ew_result_img->width) >> 1)), (output->height - ((output->height - ew_result_img->height) >> 1)) };
+		A_long left_edge = ((output->width - ew_result_img->width) >> 1);
+		A_long top_edge = ((output->height - ew_result_img->height) >> 1);
+		A_long right_edge = (output->width - ((output->width - ew_result_img->width) >> 1));
+		A_long bottom_edge = (output->height - ((output->height - ew_result_img->height) >> 1));
+		destArea = { left_edge, top_edge, right_edge, bottom_edge };
 		PF_COPY(ew_result_img, output, NULL, &destArea);
 	}
 
