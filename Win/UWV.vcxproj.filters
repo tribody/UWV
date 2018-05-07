@@ -247,6 +247,7 @@
     <ClCompile Include="..\feature\sift.cpp">
       <Filter>Supporting code</Filter>
     </ClCompile>
+    <ClCompile Include="..\blending.h" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\UWVPiPL.r">

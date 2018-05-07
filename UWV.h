@@ -86,6 +86,7 @@ typedef short int			int16;
 
 #include "imgproc.h"
 #include "stitch/blender.h"
+#include "blending.h"
 #define PLG_IN
 
 using namespace std;

@@ -40,6 +40,7 @@ class CylinderStitcher : public StitcherBase {
 		virtual void only_build_homog();
 		virtual void change_imgsref(std::vector<Mat32f>&);
 		Mat32f only_render(); // add a only_render function
+		void return_homogs(std::vector<Homography>&, std::vector<Homography> &);
 };
 
 

@@ -21,7 +21,7 @@ namespace pano {
 void CylinderStitcher::change_imgsref(std::vector<Mat32f>& mat_imgs) {
 	// bundle.component[0].imgptr // ²Ù×÷/Ìæ»» ±»blendµÄÍ¼Æ¬
 	for (int k = 0; k < imgs.size(); k++) {
-		imgs[k].change_imgref(mat_imgs[k]);
+		imgs[k].change_oneimgref(mat_imgs[k]);
 	}
 }
 
@@ -39,6 +39,13 @@ void CylinderStitcher::only_build_homog() {
 	bundle.update_proj_range();
 	//auto ret = bundle.blend();
 	//return perspective_correction(ret);
+}
+
+void CylinderStitcher::return_homogs(std::vector<Homography> & result_homogs, std::vector<Homography> & result_homogs_invers) {
+	for (auto &i: bundle.component) {
+		result_homogs.emplace_back(i.homo);
+		result_homogs_invers.emplace_back(i.homo_inv);
+	}
 }
 
 void CylinderStitcher::build_warp() {

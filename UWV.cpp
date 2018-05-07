@@ -68,11 +68,12 @@ PF_EffectWorld *dest_back_layer; // background image
 std::vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
 std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
-// 公用同一个ew_result_img来显示结果：imported，calc H，can_render
-PF_EffectWorld* ew_result_img = new  PF_EffectWorld;
+
 Mat32f* mat_result_img_ptr;
 CylinderStitcher* h_calc_blender_ptr = NULL; // 全局方式：1. 控制在AE中预览的时候只存在一个CylinderStitcher；2. 在真正render的时候，重新保持另一个CylinderStitcher
 A_long key_frame_calc_h;
+std::vector<Homography> result_homogs; // (12, Homography::I()); 不必写定12个，按需要添加
+std::vector<Homography> result_homogs_invers; // (12, Homography::I());
 
 
 
@@ -715,6 +716,9 @@ Render (
 	// 当前应用（使用）这个插件的layer
 	// PF_EffectWorld	*pure_color_layer = &params[UWV_INPUT]->u.ld; // 流程：把别的素材的当前帧当作参数（处理后）写到output上，
 
+	// 公用同一个ew_result_img来显示结果：imported，calc_H，can_render
+	PF_EffectWorld* ew_result_img = new PF_EffectWorld;
+
 	// 获取AE工具套件
 	AEGP_SuiteHandler suites(in_data->pica_basicP);
 	PF_WorldSuite2 *wsP = NULL;
@@ -781,10 +785,8 @@ Render (
 		}
 		// show current imported views
 		PF_COPY(ew_selected_view, output, NULL, NULL);
-		if (ew_selected_view)
-		{
-			delete ew_selected_view;
-		}
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_selected_view));
+		if (ew_selected_view) delete ew_selected_view;
 	}
 
 
@@ -811,11 +813,15 @@ Render (
 				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
 			}
 
+			if (h_calc_blender_ptr) delete h_calc_blender_ptr;
 			h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
 			h_calc_blender_ptr->only_build_homog();
+
+			//取出计算结果Homography，在后续融合中使用
+			h_calc_blender_ptr->return_homogs(result_homogs, result_homogs_invers);
 		}
 
-		// 使用CylinderStitcher进行H计算
+		// 使用CylinderStitcher进行 图像渲染
 		if (h_calc_blender_ptr)
 		{
 			h_calc_blender_ptr->change_imgsref(mat_imgs);
@@ -823,21 +829,57 @@ Render (
 			*mat_result_img_ptr = crop(*mat_result_img_ptr);
 		}
 
+		// 图像融合:by ikx
+		// *mat_result_img_ptr = blendingCPU(mat_imgs, result_homogs);
+
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-		A_long left_edge = ((output->width - ew_result_img->width) >> 1);
-		A_long top_edge = ((output->height - ew_result_img->height) >> 1);
-		A_long right_edge = (output->width - ((output->width - ew_result_img->width) >> 1));
-		A_long bottom_edge = (output->height - ((output->height - ew_result_img->height) >> 1));
+		A_long top_edge;
+		A_long bottom_edge;
+		A_long left_edge;
+		A_long right_edge;
+		if ((ew_result_img->width) / (ew_result_img->height) < (output->width) / (output->height))
+		{
+			top_edge = 0;
+			bottom_edge = output->height;
+			left_edge = ((output->width - (output->height*ew_result_img->width)/ ew_result_img->height) >> 1);
+			right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1);
+		}
+		else {
+			left_edge = 0;
+			right_edge = output->width;
+			top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
+			bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
+		}
 		destArea = { left_edge, top_edge, right_edge, bottom_edge};
+		
+		PF_EffectWorld* zeros_output = new PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output));
+		PF_Pixel8 *pixelP = NULL;
+		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP);
+
+		for (int y = 0; y < 3; y++) { // 注意对应mat32f的格式
+			for (int x = 0; x < 3; x++) {
+				pixelP[x].blue = 0;
+				pixelP[x].green = 0;
+				pixelP[x].red = 0;
+				pixelP[x].alpha = 255;
+			}
+			pixelP = (PF_Pixel8*)((char*)pixelP + zeros_output->rowbytes);
+		}
+
+		PF_COPY(zeros_output, output, NULL, NULL);
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, zeros_output));
+
 		PF_COPY(ew_result_img, output, NULL, &destArea);
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_result_img));
 	}
 
 
 	/*
-	<3>. Use parameters to Finally Stitch every frames in AE or AME
+	<3>. Blend the Finally Stitch every frames in AE or AME using parameters
 	*/
 	if (flag_check_render && (num_selected_imgs > 1))
 	{
@@ -855,6 +897,7 @@ Render (
 				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
 			}
 
+			if (h_calc_blender_ptr) delete h_calc_blender_ptr;
 			h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
 			h_calc_blender_ptr->only_build_homog();
 		}
@@ -870,16 +913,51 @@ Render (
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-		A_long left_edge = ((output->width - ew_result_img->width) >> 1);
-		A_long top_edge = ((output->height - ew_result_img->height) >> 1);
-		A_long right_edge = (output->width - ((output->width - ew_result_img->width) >> 1));
-		A_long bottom_edge = (output->height - ((output->height - ew_result_img->height) >> 1));
+		A_long top_edge;
+		A_long bottom_edge;
+		A_long left_edge;
+		A_long right_edge;
+		if ((ew_result_img->width) / (ew_result_img->height) < (output->width) / (output->height))
+		{
+			top_edge = 0;
+			bottom_edge = output->height;
+			left_edge = ((output->width - (output->height*ew_result_img->width) / ew_result_img->height) >> 1);
+			right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1);
+		}
+		else {
+			left_edge = 0;
+			right_edge = output->width;
+			top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
+			bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
+		}
 		destArea = { left_edge, top_edge, right_edge, bottom_edge };
+
+		PF_EffectWorld* zeros_output = new PF_EffectWorld;
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output));
+		PF_Pixel8 *pixelP = NULL;
+		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP);
+
+		for (int y = 0; y < 3; y++) { // 注意对应mat32f的格式
+			for (int x = 0; x < 3; x++) {
+				pixelP[x].blue = 0;
+				pixelP[x].green = 0;
+				pixelP[x].red = 0;
+				pixelP[x].alpha = 255;
+			}
+			pixelP = (PF_Pixel8*)((char*)pixelP + zeros_output->rowbytes);
+		}
+
+		PF_COPY(zeros_output, output, NULL, NULL);
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, zeros_output));
+
 		PF_COPY(ew_result_img, output, NULL, &destArea);
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_result_img));
 	}
 
 	// 为了表示此次点击是使能flag_calc_homog，最后再置零
 	if (flag_calc_homog) flag_calc_homog = false;
+
+	if (ew_result_img) delete ew_result_img;
 
 	return err;
 }
