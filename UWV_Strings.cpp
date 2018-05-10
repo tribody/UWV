@@ -19,7 +19,7 @@
 /*                                                                 */
 /*******************************************************************/
 
-#include "UWV.h"
+#include "UWV_Strings.h"
 
 typedef struct {
 	A_u_long	index;
@@ -87,6 +87,8 @@ TableString		g_strs[StrID_NUMTYPES] = {
 	StrID_Projection,				"Projection Plane",
 	StrID_Projection_Type,			"Planar projection|""Cylindrical projection",
 	StrID_Focal_Lenghth,			"Focal lenghth",
+	StrID_Multi_Band_Blend,         "Multi Band Blend",
+	StrID_Multi_Band_Blend_Num,     "0|""1|""2|""3|""4|""5",
 	StrID_Homography,				"Click to Calculate the Homography",
 	StrID_Render,				    "Check for Render",
 };

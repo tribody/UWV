@@ -20,6 +20,7 @@
 /*******************************************************************/
 
 #pragma once
+#include "UWV.h"
 
 typedef enum {
 	StrID_NONE, 
@@ -80,6 +81,8 @@ typedef enum {
 	StrID_Projection,
 	StrID_Projection_Type,
 	StrID_Focal_Lenghth,
+	StrID_Multi_Band_Blend,
+	StrID_Multi_Band_Blend_Num,
 	StrID_Homography,	//Calculate homography
 	StrID_Render,
 

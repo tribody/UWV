@@ -86,7 +86,10 @@ typedef short int			int16;
 
 #include "imgproc.h"
 #include "stitch/blender.h"
+#ifndef BLENDING
+#define BLENDING
 #include "blending.h"
+#endif //  BLENDING
 #define PLG_IN
 
 using namespace std;
@@ -116,8 +119,8 @@ using namespace config;
 #define	UWV_ESTIMATION_DFLT	7.033f
 #define UWV_ESTIMATION_PREC	3
 //Frame shift
-#define UWV_FRAME_SHIFT_MIN	-5
-#define UWV_FRAME_SHIFT_MAX	5
+#define UWV_FRAME_SHIFT_MIN	-10
+#define UWV_FRAME_SHIFT_MAX	10
 #define UWV_FRAME_SHIFT_DFLT	0
 //Projection type
 #define UWV_METHOD_NUM			2	
@@ -185,6 +188,7 @@ enum {
 	UWV_SETTINGS_BEG,
 	UWV_PROJECTION_METHOD,
 	UWV_FOCAL,
+	UWV_MULTI_BAND_NUM,
 	UWV_HOMOGRAPHY,
 	UWV_RENDER,
 	UWV_SETTINGS_END,
@@ -247,6 +251,7 @@ enum {
 	// PROJECTION_ID, // 原PROJECTION_METHOD_ID，即下一个
 	METHOD_ID,
 	FOCAL_ID,
+	UWV_MULTI_BAND_NUM_ID,
 	HOMOGRAPHY_ID,
 	RENDER_ID,
 	STITCH_END_ID,
@@ -273,6 +278,8 @@ MatToEw(PF_InData *in_data, Mat32f *imgMat, PF_EffectWorld *imgE);
 
 static PF_Err
 EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat);
+
+void OutputDebugPrintf(const char * strOutputString, ...);
 	
 DllExport	PF_Err 
 EntryPointFunc(	

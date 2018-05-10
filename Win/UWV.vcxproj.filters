@@ -248,6 +248,9 @@
       <Filter>Supporting code</Filter>
     </ClCompile>
     <ClCompile Include="..\blending.h" />
+    <ClCompile Include="..\blending.cpp">
+      <Filter>Supporting code</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\UWVPiPL.r">

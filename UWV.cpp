@@ -353,6 +353,14 @@ ParamsSetup (
 		FOCAL_ID);
 
 	AEFX_CLR_STRUCT(def);
+	def.flags |= PF_ParamFlag_SUPERVISE;
+	PF_ADD_POPUP(STR(StrID_Multi_Band_Blend),
+		5,
+		1,
+		STR(StrID_Multi_Band_Blend_Num),
+		UWV_MULTI_BAND_NUM_ID);
+
+	AEFX_CLR_STRUCT(def);
 	PF_ADD_BUTTON(STR(StrID_Homography),
 		"Calculate",
 		0,
@@ -446,6 +454,7 @@ MakeParamCopy(
 	copy[STITCH_BEG_ID] = *actual[STITCH_BEG_ID];
 	copy[UWV_PROJECTION_METHOD] = *actual[UWV_PROJECTION_METHOD];
 	copy[UWV_FOCAL] = *actual[UWV_FOCAL];
+	copy[UWV_MULTI_BAND_NUM] = *actual[UWV_MULTI_BAND_NUM];
 	copy[UWV_HOMOGRAPHY] = *actual[UWV_HOMOGRAPHY];
 	copy[UWV_RENDER] = *actual[UWV_RENDER];
 	return PF_Err_NONE;
@@ -510,7 +519,7 @@ UserChangedParam(
 		break;
 
 	case UWV_PROJECTION_METHOD:
-		UWV_proj_method = params[UWV_PROJECTION_METHOD]->u.pd.value;
+		//UWV_proj_method = params[UWV_PROJECTION_METHOD]->u.pd.value;
 		break;
 
 	case UWV_FOCAL:
@@ -578,8 +587,12 @@ UpdateParameterUI(
 			&param_copy[UWV_FRAME_SHIFT_1_ID]));
 	}
 
+	ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
+		UWV_MULTI_BAND_NUM_ID,
+		&param_copy[UWV_MULTI_BAND_NUM_ID]));
+
 	if (!err && params[UWV_PROJECTION_METHOD]->u.pd.value == 2) {
-		param_copy[UWV_FOCAL].ui_flags &= ~PF_PUI_DISABLED;
+		param_copy[UWV_FOCAL].ui_flags &= ~PF_PUI_DISABLED; // 可点击区域变灰 效果
 		ERR(suites.ParamUtilsSuite3()->PF_UpdateParamUI(in_data->effect_ref,
 			UWV_FOCAL,
 			&param_copy[UWV_FOCAL]));
@@ -590,6 +603,8 @@ UpdateParameterUI(
 			UWV_FOCAL,
 			&param_copy[UWV_FOCAL]));
 	}
+
+	// 按钮变灰 效果
 	
 	return err;
 }
@@ -698,6 +713,17 @@ CropImg()
 	;
 }
 
+void OutputDebugPrintf(const char * strOutputString, ...)
+{
+	char strBuffer[4096] = { 0 };
+	va_list vlArgs;
+	va_start(vlArgs, strOutputString);
+	_vsnprintf(strBuffer, sizeof(strBuffer) - 1, strOutputString, vlArgs);
+	//vsprintf(strBuffer,strOutputString,vlArgs);
+	va_end(vlArgs);
+	OutputDebugString(strBuffer);
+}
+
 static PF_Err 
 Render (
 	PF_InData		*in_data,
@@ -733,6 +759,15 @@ Render (
 	3. homography or the stitcher class
 	*/
 	flag_check_render = params[UWV_RENDER]->u.bd.value;
+
+	if (params[UWV_PROJECTION_METHOD]->u.pd.value == 2)
+	{
+		config::CYLINDER = true;
+		config::ESTIMATE_CAMERA = false;
+	}
+
+	config::MULTIBAND = params[UWV_MULTI_BAND_NUM]->u.pd.value - 1; // 多通带融合
+
 	// 1. Get current frame datas
 	// 2. Get parameters
 	int i;
@@ -747,10 +782,7 @@ Render (
 	}
 
 	// 注意：render会对mat_result_img_ptr赋值，很可能会改变其size，所以在此重置
-	if (mat_result_img_ptr)
-	{
-		delete mat_result_img_ptr;
-	}
+	if (mat_result_img_ptr) delete mat_result_img_ptr;
 	mat_result_img_ptr = new Mat32f(output->height, output->width, 3);
 	PF_Rect destArea;
 
@@ -815,6 +847,7 @@ Render (
 
 			if (h_calc_blender_ptr) delete h_calc_blender_ptr;
 			h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
+			// 选择投影方式！！！
 			h_calc_blender_ptr->only_build_homog();
 
 			//取出计算结果Homography，在后续融合中使用
@@ -830,12 +863,15 @@ Render (
 		}
 
 		// 图像融合:by ikx
-		// *mat_result_img_ptr = blendingCPU(mat_imgs, result_homogs);
+		Mat32f* tmp_mat_result_img_ptr;
+		tmp_mat_result_img_ptr = new Mat32f(blendingCPU(mat_imgs, result_homogs));
+		if (tmp_mat_result_img_ptr) delete tmp_mat_result_img_ptr;
 
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
+		// 缩放、填充区域计算
 		A_long top_edge;
 		A_long bottom_edge;
 		A_long left_edge;
@@ -855,11 +891,11 @@ Render (
 		}
 		destArea = { left_edge, top_edge, right_edge, bottom_edge};
 		
+		// 输出output前，用全黑3*3矩阵覆盖output
 		PF_EffectWorld* zeros_output = new PF_EffectWorld;
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output));
 		PF_Pixel8 *pixelP = NULL;
 		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP);
-
 		for (int y = 0; y < 3; y++) { // 注意对应mat32f的格式
 			for (int x = 0; x < 3; x++) {
 				pixelP[x].blue = 0;
@@ -879,7 +915,7 @@ Render (
 
 
 	/*
-	<3>. Blend the Finally Stitch every frames in AE or AME using parameters
+	<3>. Blend the final frames in AE or AME using parameters
 	*/
 	if (flag_check_render && (num_selected_imgs > 1))
 	{
@@ -905,7 +941,12 @@ Render (
 		if (h_calc_blender_ptr)
 		{
 			h_calc_blender_ptr->change_imgsref(mat_imgs);
+			// test time usage of render
+			int t1 = 0, t2 = 0;
+			t1 = GetTickCount();
 			*mat_result_img_ptr = h_calc_blender_ptr->only_render();
+			t2 = GetTickCount();
+			OutputDebugPrintf("GetTickCount: %d\n", (t2 - t1));
 			*mat_result_img_ptr = crop(*mat_result_img_ptr);
 		}
 
@@ -913,6 +954,7 @@ Render (
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
 
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
+		// 缩放、填充区域计算
 		A_long top_edge;
 		A_long bottom_edge;
 		A_long left_edge;
@@ -932,11 +974,11 @@ Render (
 		}
 		destArea = { left_edge, top_edge, right_edge, bottom_edge };
 
+		// 输出output前，用全黑3*3矩阵覆盖output
 		PF_EffectWorld* zeros_output = new PF_EffectWorld;
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output));
 		PF_Pixel8 *pixelP = NULL;
 		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP);
-
 		for (int y = 0; y < 3; y++) { // 注意对应mat32f的格式
 			for (int x = 0; x < 3; x++) {
 				pixelP[x].blue = 0;
