@@ -54,13 +54,13 @@ A_long heigh_output;
 PF_ParamDef checkout;
 std::vector<PF_EffectWorld *>src_imgs( 12, NULL );
 
-float focal_length = UWV_ESTIMATION_DFLT;
+//float focal_length = UWV_FOCAL_LEN_DFLT;
 
 bool flag_calc_homog = false;
 bool flag_check_render = false;
-bool flag_single_CylinderStitcher = true;
+bool flag_single_Stitcher = true;
 
-int UWV_proj_method = UWV_METHOD_DFLT;
+//int UWV_proj_method = UWV_METHOD_DFLT;
 
 // add by chromiumikx
 int num_selected_imgs;
@@ -70,7 +70,7 @@ std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
 
 Mat32f* mat_result_img_ptr;
-CylinderStitcher* h_calc_blender_ptr = NULL; // 全局方式：1. 控制在AE中预览的时候只存在一个CylinderStitcher；2. 在真正render的时候，重新保持另一个CylinderStitcher
+Stitcher* h_calc_blender_ptr = NULL; // 全局方式：1. 控制在AE中预览的时候只存在一个Stitcher；2. 在真正render的时候，重新保持另一个Stitcher
 A_long key_frame_calc_h;
 std::vector<Homography> result_homogs; // (12, Homography::I()); 不必写定12个，按需要添加
 std::vector<Homography> result_homogs_invers; // (12, Homography::I());
@@ -341,13 +341,13 @@ ParamsSetup (
 
 	AEFX_CLR_STRUCT(def);
 	PF_ADD_FLOAT_SLIDER(STR(StrID_Focal_Lenghth),
-		UWV_ESTIMATION_MIN,
-		UWV_ESTIMATION_MAX,
-		UWV_ESTIMATION_MIN,
-		UWV_ESTIMATION_MAX,
+		UWV_FOCLA_LEN_MIN,
+		UWV_FOCAL_LEN_MAX,
+		UWV_FOCLA_LEN_MIN,
+		UWV_FOCAL_LEN_MAX,
 		AEFX_AUDIO_DEFAULT_CURVE_TOLERANCE,
-		UWV_ESTIMATION_DFLT,
-		UWV_ESTIMATION_PREC,
+		UWV_FOCAL_LEN_DFLT,
+		UWV_FOCAL_LEN_PREC,
 		0,
 		1,
 		FOCAL_ID);
@@ -523,12 +523,12 @@ UserChangedParam(
 		break;
 
 	case UWV_FOCAL:
-		focal_length = (A_FpShort)params[UWV_FOCAL]->u.fs_d.value;
+		//focal_length = (A_FpShort)params[UWV_FOCAL]->u.fs_d.value;
 		break;
 	
 	case UWV_HOMOGRAPHY:
 		flag_calc_homog = true;
-		flag_single_CylinderStitcher = true;
+		flag_single_Stitcher = true;
 		out_data->out_flags |= PF_OutFlag_FORCE_RERENDER;
 		break;
 
@@ -610,15 +610,15 @@ UpdateParameterUI(
 }
 
 static PF_Err
-EwToMat(PF_InData *in_data, PF_EffectWorld *imgE, Mat32f& imgMat) {
+EwToMat(PF_InData *in_data, PF_EffectWorld *imgEw, Mat32f& imgMat) {
 	PF_Err err = PF_Err_NONE;
 
-	int w = imgE->width,
-		h = imgE->height,
-		rb = imgE->rowbytes; // 每次步进，下一像素
+	int w = imgEw->width,
+		h = imgEw->height,
+		rb = imgEw->rowbytes; // 每次步进，下一像素
 
 	PF_Pixel8 *pixelP = NULL;
-	PF_GET_PIXEL_DATA8(imgE, NULL, &pixelP);
+	PF_GET_PIXEL_DATA8(imgEw, NULL, &pixelP);
 
 	for (int y = 0; y < imgMat.rows(); y++) {
 		for (int x = 0; x < imgMat.cols(); x++) {
@@ -760,13 +760,9 @@ Render (
 	*/
 	flag_check_render = params[UWV_RENDER]->u.bd.value;
 
-	if (params[UWV_PROJECTION_METHOD]->u.pd.value == 2)
-	{
-		config::CYLINDER = true;
-		config::ESTIMATE_CAMERA = false;
-	}
+	config::FOCAL_LENGTH = ((A_FpShort)params[UWV_FOCAL]->u.fs_d.value)*7.38;  // 14(wild), 21(medium), 28(narrow) just for gopro 5 black. 
 
-	config::MULTIBAND = params[UWV_MULTI_BAND_NUM]->u.pd.value - 1; // 多通带融合
+	//config::MULTIBAND = params[UWV_MULTI_BAND_NUM]->u.pd.value - 1; // 多通带融合
 
 	// 1. Get current frame datas
 	// 2. Get parameters
@@ -823,6 +819,73 @@ Render (
 
 
 
+	// 宏函数，生成Stitcher，渲染
+	#define CALC_AND_BLEND \
+		if (flag_single_Stitcher) \
+		{ \
+			flag_single_Stitcher = false; \
+			num_selected_imgs = 0; \
+			vector<PF_EffectWorld *>key_src_imgs(12, NULL); \
+			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr)); \
+			vector<Mat32f> key_mat_imgs; \
+			for (i = 0; i < num_selected_imgs; i++) { \
+				key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3); \
+				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i]))); \
+			} \
+			if (h_calc_blender_ptr) delete h_calc_blender_ptr; \
+			h_calc_blender_ptr = new Stitcher(move(key_mat_imgs)); \
+			h_calc_blender_ptr->only_build_homog(); \
+			h_calc_blender_ptr->return_homogs(result_homogs, result_homogs_invers); \
+		} \
+		if (h_calc_blender_ptr) \
+		{ \
+			h_calc_blender_ptr->change_imgsref(mat_imgs); \
+			*mat_result_img_ptr = h_calc_blender_ptr->only_render(); \
+		} \
+		Mat32f* tmp_mat_result_img_ptr; \
+		tmp_mat_result_img_ptr = new Mat32f(blendingCPU(mat_imgs, result_homogs)); \
+		if (tmp_mat_result_img_ptr) delete tmp_mat_result_img_ptr; \
+		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format)); \
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img))); \
+		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img)); \
+		A_long top_edge; \
+		A_long bottom_edge; \
+		A_long left_edge; \
+		A_long right_edge; \
+		if ((ew_result_img->width) / (ew_result_img->height) < (output->width) / (output->height)) \
+		{ \
+			top_edge = 0; \
+			bottom_edge = output->height; \
+			left_edge = ((output->width - (output->height*ew_result_img->width) / ew_result_img->height) >> 1); \
+			right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1); \
+		} \
+		else { \
+			left_edge = 0; \
+			right_edge = output->width; \
+			top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1); \
+			bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1); \
+		} \
+		destArea = { left_edge, top_edge, right_edge, bottom_edge }; \
+		PF_EffectWorld* zeros_output = new PF_EffectWorld; \
+		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output)); \
+		PF_Pixel8 *pixelP = NULL; \
+		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP); \
+		for (int y = 0; y < 3; y++) { \
+			for (int x = 0; x < 3; x++) { \
+				pixelP[x].blue = 0; \
+				pixelP[x].green = 0; \
+				pixelP[x].red = 0; \
+				pixelP[x].alpha = 255; \
+			} \
+			pixelP = (PF_Pixel8*)((char*)pixelP + zeros_output->rowbytes); \
+		} \
+		PF_COPY(zeros_output, output, NULL, NULL); \
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, zeros_output)); \
+		PF_COPY(ew_result_img, output, NULL, &destArea); \
+		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_result_img))
+
+
+
 	/*
 	<2>. Calc H once
 	*/
@@ -831,86 +894,16 @@ Render (
 		// 准备序列化：preview render之后，若对当前的H（由key_frame_calc_h计算出）满意，保存项目时会序列化
 		*(mySD_P->frame_calc_h_ptr) = (in_data->current_time); // 记录（之后会序列化）选来计算的帧
 
+
+		// 图片格式转换
 		// 初始化CylinderStitcher
-		if (flag_single_CylinderStitcher)
-		{
-			flag_single_CylinderStitcher = false;
-			num_selected_imgs = 0;
-			std::vector<PF_EffectWorld *>key_src_imgs(12, NULL);
-			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr));
-			// 图片格式转换
-			vector<Mat32f> key_mat_imgs;
-			for (i = 0; i < num_selected_imgs; i++) {
-				key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3);
-				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
-			}
-
-			if (h_calc_blender_ptr) delete h_calc_blender_ptr;
-			h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
-			// 选择投影方式！！！
-			h_calc_blender_ptr->only_build_homog();
-
-			//取出计算结果Homography，在后续融合中使用
-			h_calc_blender_ptr->return_homogs(result_homogs, result_homogs_invers);
-		}
-
+		// 取出计算结果Homography，在后续融合中使用
 		// 使用CylinderStitcher进行 图像渲染
-		if (h_calc_blender_ptr)
-		{
-			h_calc_blender_ptr->change_imgsref(mat_imgs);
-			*mat_result_img_ptr = h_calc_blender_ptr->only_render();
-			*mat_result_img_ptr = crop(*mat_result_img_ptr);
-		}
-
 		// 图像融合:by ikx
-		Mat32f* tmp_mat_result_img_ptr;
-		tmp_mat_result_img_ptr = new Mat32f(blendingCPU(mat_imgs, result_homogs));
-		if (tmp_mat_result_img_ptr) delete tmp_mat_result_img_ptr;
-
-		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
-
-		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
 		// 缩放、填充区域计算
-		A_long top_edge;
-		A_long bottom_edge;
-		A_long left_edge;
-		A_long right_edge;
-		if ((ew_result_img->width) / (ew_result_img->height) < (output->width) / (output->height))
-		{
-			top_edge = 0;
-			bottom_edge = output->height;
-			left_edge = ((output->width - (output->height*ew_result_img->width)/ ew_result_img->height) >> 1);
-			right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1);
-		}
-		else {
-			left_edge = 0;
-			right_edge = output->width;
-			top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
-			bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
-		}
-		destArea = { left_edge, top_edge, right_edge, bottom_edge};
-		
 		// 输出output前，用全黑3*3矩阵覆盖output
-		PF_EffectWorld* zeros_output = new PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output));
-		PF_Pixel8 *pixelP = NULL;
-		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP);
-		for (int y = 0; y < 3; y++) { // 注意对应mat32f的格式
-			for (int x = 0; x < 3; x++) {
-				pixelP[x].blue = 0;
-				pixelP[x].green = 0;
-				pixelP[x].red = 0;
-				pixelP[x].alpha = 255;
-			}
-			pixelP = (PF_Pixel8*)((char*)pixelP + zeros_output->rowbytes);
-		}
-
-		PF_COPY(zeros_output, output, NULL, NULL);
-		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, zeros_output));
-
-		PF_COPY(ew_result_img, output, NULL, &destArea);
-		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_result_img));
+		// 读写mat32f时，注意对应mat32f的格式
+		CALC_AND_BLEND;
 	}
 
 
@@ -919,81 +912,7 @@ Render (
 	*/
 	if (flag_check_render && (num_selected_imgs > 1))
 	{
-		if (flag_single_CylinderStitcher)
-		{
-			flag_single_CylinderStitcher = false;
-			num_selected_imgs = 0;
-			std::vector<PF_EffectWorld *>key_src_imgs(12, NULL);
-			// loop every selecting action, little bit low efficient
-			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr));
-			// 图片格式转换
-			vector<Mat32f> key_mat_imgs;
-			for (i = 0; i < num_selected_imgs; i++) {
-				key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3);
-				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i])));
-			}
-
-			if (h_calc_blender_ptr) delete h_calc_blender_ptr;
-			h_calc_blender_ptr = new CylinderStitcher(move(key_mat_imgs));
-			h_calc_blender_ptr->only_build_homog();
-		}
-
-		if (h_calc_blender_ptr)
-		{
-			h_calc_blender_ptr->change_imgsref(mat_imgs);
-			// test time usage of render
-			int t1 = 0, t2 = 0;
-			t1 = GetTickCount();
-			*mat_result_img_ptr = h_calc_blender_ptr->only_render();
-			t2 = GetTickCount();
-			OutputDebugPrintf("GetTickCount: %d\n", (t2 - t1));
-			*mat_result_img_ptr = crop(*mat_result_img_ptr);
-		}
-
-		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img)));
-
-		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img));
-		// 缩放、填充区域计算
-		A_long top_edge;
-		A_long bottom_edge;
-		A_long left_edge;
-		A_long right_edge;
-		if ((ew_result_img->width) / (ew_result_img->height) < (output->width) / (output->height))
-		{
-			top_edge = 0;
-			bottom_edge = output->height;
-			left_edge = ((output->width - (output->height*ew_result_img->width) / ew_result_img->height) >> 1);
-			right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1);
-		}
-		else {
-			left_edge = 0;
-			right_edge = output->width;
-			top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
-			bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1);
-		}
-		destArea = { left_edge, top_edge, right_edge, bottom_edge };
-
-		// 输出output前，用全黑3*3矩阵覆盖output
-		PF_EffectWorld* zeros_output = new PF_EffectWorld;
-		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output));
-		PF_Pixel8 *pixelP = NULL;
-		PF_GET_PIXEL_DATA8(zeros_output, NULL, &pixelP);
-		for (int y = 0; y < 3; y++) { // 注意对应mat32f的格式
-			for (int x = 0; x < 3; x++) {
-				pixelP[x].blue = 0;
-				pixelP[x].green = 0;
-				pixelP[x].red = 0;
-				pixelP[x].alpha = 255;
-			}
-			pixelP = (PF_Pixel8*)((char*)pixelP + zeros_output->rowbytes);
-		}
-
-		PF_COPY(zeros_output, output, NULL, NULL);
-		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, zeros_output));
-
-		PF_COPY(ew_result_img, output, NULL, &destArea);
-		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_result_img));
+		CALC_AND_BLEND;
 	}
 
 	// 为了表示此次点击是使能flag_calc_homog，最后再置零

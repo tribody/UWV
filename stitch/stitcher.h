@@ -49,6 +49,7 @@ class Stitcher : public StitcherBase {
 		void dump_matchinfo(const char*) const;
 		void load_matchinfo(const char*);
 	public:
+
 		template<typename U, typename X =
 			disable_if_same_or_derived<Stitcher, U>>
 			Stitcher(U&& i) : StitcherBase(std::forward<U>(i)) {
@@ -58,6 +59,10 @@ class Stitcher : public StitcherBase {
 			}
 
 		virtual Mat32f build();
+		virtual void only_build_homog();
+		Mat32f only_render();
+		void change_imgsref(std::vector<Mat32f>& mat_imgs);
+		void return_homogs(std::vector<Homography> & result_homogs, std::vector<Homography> & result_homogs_invers);
 };
 
 }

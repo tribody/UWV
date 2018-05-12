@@ -26,8 +26,59 @@ using namespace config;
 namespace pano {
 
 // use in development
-const static bool DEBUG_OUT = true;
+const static bool DEBUG_OUT = false; // debug输出控制，否则dump match数据的时候可能会出现错误（CImg中）
 const static char* MATCHINFO_DUMP = "log/matchinfo.txt";
+
+void Stitcher::change_imgsref(std::vector<Mat32f>& mat_imgs) {
+	// bundle.component[0].imgptr // 操作/替换 被blend的图片
+	for (int k = 0; k < imgs.size(); k++) {
+		imgs[k].change_oneimgref(mat_imgs[k]);
+	}
+}
+
+Mat32f Stitcher::only_render() {
+	// TODO automatically determine projection method
+	if (ESTIMATE_CAMERA)
+		//bundle.proj_method = ConnectedImages::ProjectionMethod::cylindrical;
+		bundle.proj_method = ConnectedImages::ProjectionMethod::spherical;
+	else
+		bundle.proj_method = ConnectedImages::ProjectionMethod::flat;
+	print_debug("Using projection method: %d\n", bundle.proj_method);
+	bundle.update_proj_range();
+	return bundle.blend();
+}
+
+void Stitcher::only_build_homog() {
+	calc_feature();
+	// TODO choose a better starting point by MST use centrality
+
+	pairwise_matches.resize(imgs.size());
+	for (auto& k : pairwise_matches) k.resize(imgs.size());
+	if (ORDERED_INPUT)
+		linear_pairwise_match();
+	else
+		pairwise_match();
+	free_feature();
+	//load_matchinfo(MATCHINFO_DUMP);
+	if (DEBUG_OUT) {
+		draw_matchinfo();
+		dump_matchinfo(MATCHINFO_DUMP);
+	}
+	assign_center();
+
+	if (ESTIMATE_CAMERA)
+		estimate_camera();
+	else
+		build_linear_simple();		// naive mode
+	pairwise_matches.clear();
+}
+
+void Stitcher::return_homogs(std::vector<Homography> & result_homogs, std::vector<Homography> & result_homogs_invers) {
+	for (auto &i : bundle.component) {
+		result_homogs.emplace_back(i.homo);
+		result_homogs_invers.emplace_back(i.homo_inv);
+	}
+}
 
 Mat32f Stitcher::build() {
 	calc_feature();

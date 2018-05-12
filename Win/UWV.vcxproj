@@ -375,6 +375,7 @@ cl /D "MSWindows" /EP $(IntDir)%(Filename).rrc &gt;               "$(ProjectDir)
     <ResourceCompile Include="UWVPiPL.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\blending_ver2.h" />
     <ClInclude Include="..\feature\dist.h" />
     <ClInclude Include="..\stitch\blender.h" />
     <ClInclude Include="..\stitch\camera.h" />
@@ -419,6 +420,7 @@ cl /D "MSWindows" /EP $(IntDir)%(Filename).rrc &gt;               "$(ProjectDir)
     <ClCompile Include="..\..\..\Util\MissingSuiteError.cpp" />
     <ClCompile Include="..\blending.cpp" />
     <ClCompile Include="..\blending.h" />
+    <ClCompile Include="..\blending_ver2.cpp" />
     <ClCompile Include="..\feature\brief.cpp" />
     <ClCompile Include="..\feature\dist.cpp" />
     <ClCompile Include="..\feature\dog.cpp" />

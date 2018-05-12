@@ -135,6 +135,7 @@
     <ClInclude Include="..\stitch\warp.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="..\blending_ver2.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\Util\AEGP_SuiteHandler.cpp">
@@ -251,6 +252,7 @@
     <ClCompile Include="..\blending.cpp">
       <Filter>Supporting code</Filter>
     </ClCompile>
+    <ClCompile Include="..\blending_ver2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\UWVPiPL.r">

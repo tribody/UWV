@@ -114,10 +114,10 @@ using namespace config;
 #define UWV_RATIO_MAX			80
 #define UWV_RATIO_DFLT			50
 //Focal length estimation
-#define	UWV_ESTIMATION_MIN		5
-#define	UWV_ESTIMATION_MAX		9
-#define	UWV_ESTIMATION_DFLT	7.033f
-#define UWV_ESTIMATION_PREC	3
+#define	UWV_FOCLA_LEN_MIN		2
+#define	UWV_FOCAL_LEN_MAX		9
+#define	UWV_FOCAL_LEN_DFLT	7.033f
+#define UWV_FOCAL_LEN_PREC	3
 //Frame shift
 #define UWV_FRAME_SHIFT_MIN	-10
 #define UWV_FRAME_SHIFT_MAX	10
