@@ -195,8 +195,8 @@ IncrementalBundleAdjuster::ErrorStats IncrementalBundleAdjuster::calcError(
 			/*
 			 *if (fabs(ret.residuals[idx+1]) > 100
 			 *    or fabs(ret.residuals[idx]) > 100) {
-			 *  auto transfed = cylindrical::homo2proj(Hto_to_from.trans(to));
-			 *  auto from3d = cylindrical::homo2proj(Vec{from.x, from.y, 1});
+			 *  auto transfed = cylindrical::homogen2proj(Hto_to_from.trans(to));
+			 *  auto from3d = cylindrical::homogen2proj(Vec{from.x, from.y, 1});
 			 *  print_debug("WHAT");
 			 *  PP(from);PP(to);PP(transformed);
 			 *  PP(Hto_to_from);

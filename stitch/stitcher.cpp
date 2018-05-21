@@ -29,6 +29,7 @@ namespace pano {
 const static bool DEBUG_OUT = false; // debug输出控制，否则dump match数据的时候可能会出现错误（CImg中）
 const static char* MATCHINFO_DUMP = "log/matchinfo.txt";
 
+// 增加的change_imgsref、only_clac_homogras、return_render_params、only_render函数
 void Stitcher::change_imgsref(std::vector<Mat32f>& mat_imgs) {
 	// bundle.component[0].imgptr // 操作/替换 被blend的图片
 	for (int k = 0; k < imgs.size(); k++) {
@@ -36,19 +37,7 @@ void Stitcher::change_imgsref(std::vector<Mat32f>& mat_imgs) {
 	}
 }
 
-Mat32f Stitcher::only_render() {
-	// TODO automatically determine projection method
-	if (ESTIMATE_CAMERA)
-		//bundle.proj_method = ConnectedImages::ProjectionMethod::cylindrical;
-		bundle.proj_method = ConnectedImages::ProjectionMethod::spherical;
-	else
-		bundle.proj_method = ConnectedImages::ProjectionMethod::flat;
-	print_debug("Using projection method: %d\n", bundle.proj_method);
-	bundle.update_proj_range();
-	return bundle.blend();
-}
-
-void Stitcher::only_build_homog() {
+void Stitcher::only_clac_homogras() {
 	calc_feature();
 	// TODO choose a better starting point by MST use centrality
 
@@ -71,15 +60,53 @@ void Stitcher::only_build_homog() {
 	else
 		build_linear_simple();		// naive mode
 	pairwise_matches.clear();
+
+	// calc params before blend
+	// TODO automatically determine projection method
+	if (ESTIMATE_CAMERA)
+		//bundle.proj_method = ConnectedImages::ProjectionMethod::cylindrical;
+		bundle.proj_method = ConnectedImages::ProjectionMethod::spherical;
+	else
+		bundle.proj_method = ConnectedImages::ProjectionMethod::flat;
+	print_debug("Using projection method: %d\n", bundle.proj_method);
+	bundle.update_proj_range();
 }
 
-void Stitcher::return_homogs(std::vector<Homography> & result_homogs, std::vector<Homography> & result_homogs_invers) {
+void Stitcher::return_homogras(std::vector<Homography> & result_homogras) {
 	for (auto &i : bundle.component) {
-		result_homogs.emplace_back(i.homo);
-		result_homogs_invers.emplace_back(i.homo_inv);
+		result_homogras.emplace_back(i.homo);
 	}
 }
 
+void Stitcher::return_render_params(
+	std::vector<std::vector<Coor>> & imgs_ranges_minNmax,
+	std::vector<Vec2D>& final_proj_range_idnt,
+	Coor& target_size,
+	Vec2D& final_resolution) {
+	target_size.x = 0;
+	target_size.y = 0;
+	auto scale_coor_to_img_coor = [&](Vec2D v) {
+		v = (v - bundle.proj_range.min) / bundle.get_final_resolution();
+		return Coor(v.x, v.y);
+	};
+    for (auto &i : bundle.component) {
+		std::vector<Coor> coor_range_ = { scale_coor_to_img_coor(i.range.min) , scale_coor_to_img_coor(i.range.max) };
+		imgs_ranges_minNmax.emplace_back(coor_range_);
+		target_size.update_max(scale_coor_to_img_coor(i.range.max));
+	}
+
+	final_proj_range_idnt.emplace_back(bundle.proj_range.min);
+	final_proj_range_idnt.emplace_back(bundle.proj_range.max);
+	final_resolution = bundle.get_final_resolution();
+}
+
+Mat32f Stitcher::only_render() {
+	return bundle.blend();
+}
+
+
+
+// stitch原来的
 Mat32f Stitcher::build() {
 	calc_feature();
 	// TODO choose a better starting point by MST use centrality

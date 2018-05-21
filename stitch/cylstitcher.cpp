@@ -30,7 +30,7 @@ Mat32f CylinderStitcher::only_render() {
 	return perspective_correction(ret);
 }
 
-void CylinderStitcher::only_build_homog() {
+void CylinderStitcher::only_clac_homogras() {
 	calc_feature();
 	bundle.identity_idx = imgs.size() >> 1;
 	build_warp();
@@ -41,9 +41,9 @@ void CylinderStitcher::only_build_homog() {
 	//return perspective_correction(ret);
 }
 
-void CylinderStitcher::return_homogs(std::vector<Homography> & result_homogs, std::vector<Homography> & result_homogs_invers) {
+void CylinderStitcher::return_render_params(std::vector<Homography> & result_homogras, std::vector<Homography> & result_homogs_invers) {
 	for (auto &i: bundle.component) {
-		result_homogs.emplace_back(i.homo);
+		result_homogras.emplace_back(i.homo);
 		result_homogs_invers.emplace_back(i.homo_inv);
 	}
 }
@@ -165,7 +165,7 @@ Mat32f CylinderStitcher::perspective_correction(const Mat32f& img) {
 	int w = img.width(), h = img.height();
 	int refw = imgs[bundle.identity_idx].width(),
 			refh = imgs[bundle.identity_idx].height();
-	auto homo2proj = bundle.get_homo2proj();
+	auto homogen2proj = bundle.get_homogen2proj();
 	Vec2D proj_min = bundle.proj_range.min;
 
 	vector<Vec2D> corners;
@@ -175,7 +175,7 @@ Mat32f CylinderStitcher::perspective_correction(const Mat32f& img) {
 		Vec homo = cur->homo.trans(v);
 		homo.x /= refw, homo.y /= refh;
 		homo.x += 0.5 * homo.z, homo.y += 0.5 * homo.z;
-		Vec2D t_corner = homo2proj(homo);
+		Vec2D t_corner = homogen2proj(homo);
 		t_corner.x *= refw, t_corner.y *= refh;
 		t_corner = t_corner - proj_min;
 		corners.push_back(t_corner);

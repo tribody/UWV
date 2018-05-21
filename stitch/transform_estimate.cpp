@@ -115,7 +115,7 @@ Homography TransformEstimation::calc_transform(const vector<int>& matches) const
 	auto param1 = normalize(p1),
 			 param2 = normalize(p2);
 
-	// homo from p2 to p1
+	// homo from p2 to p1 (normalized!!!)
 	Matrix homo = ((transform_type == Affine) ? getAffineTransform : getPerspectiveTransform)(p1, p2);
 
 	Homography t1{{param1.second, 0, -param1.second * param1.first.x,

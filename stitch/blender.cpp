@@ -51,7 +51,17 @@ Mat32f LinearBlender::run() {
 				float *row = target.ptr(i);
 				float *wrow = weight.ptr(i);
 				for (int j = range.min.x; j < range.max.x; ++j) {
-					GET_COLOR_AND_W;
+					//GET_COLOR_AND_W; // 以下为展开版本
+					Vec2D img_coor = img.map_coor(i, j); 
+					if (img_coor.isNaN()) continue; 
+					float r = img_coor.y, c = img_coor.x; 
+					auto color = interpolate(*img.imgref.img, r, c); 
+					if (color.x < 0) continue; 
+					float w = 0.5 - fabs(c / img.imgref.width() - 0.5); 
+				    if (!(config::ORDERED_INPUT)) /* blend both direction */
+					    w *= (0.5 - fabs(r / img.imgref.height() - 0.5)); 
+					color *= w;
+
 					//#pragma omp critical
 					{
 						row[j*3] += color.x;

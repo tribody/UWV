@@ -261,11 +261,31 @@ enum {
 typedef struct{
 	A_long* frame_calc_h_ptr; // selected cunrrent time
 	A_Boolean* flag_h_clac_for_render_ptr;
+	A_long* num_H;
+	vector<Homography>* homogs_ptr;
+	vector<vector<Coor>>* imgs_ranges_minNmax_ptr;
+	vector<Vec2D>* final_proj_range_idnt_ptr;
+	Coor* target_size_ptr;
+	Vec2D* final_resolution_ptr;
 } mySequenceData;
+
+typedef struct {
+	double data[9];
+} data_H;
+
+typedef struct {
+	double data[2];
+} data_Vec2D;
 
 typedef struct {
 	A_long flat_frame_calc_h; // selected cunrrent time
 	A_Boolean flat_flag_h_clac_for_render;
+	A_long flat_num_H;
+	data_H flat_homogs[12];
+	data_Vec2D flat_imgs_ranges_minNmax[12][2];
+	data_Vec2D flat_final_proj_range_idnt[2];
+	data_Vec2D flat_target_size;
+	data_Vec2D flat_final_resolution;
 } flatSequenceData;
 
 #ifdef __cplusplus

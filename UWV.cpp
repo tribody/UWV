@@ -41,7 +41,7 @@
 
 
 
-A_long mesh_width, mesh_height_1, src_width=0, src_height=0; // 图片和网格大小信息
+A_long mesh_width_1, mesh_height_1, src_width=0, src_height=0; // 图片和网格大小信息
 
 // I -- fundalmental matrix
 // Homo -- transform matrix
@@ -52,7 +52,7 @@ A_long heigh_output;
 
 // add by chromiumikx
 PF_ParamDef checkout;
-std::vector<PF_EffectWorld *>src_imgs( 12, NULL );
+vector<PF_EffectWorld *>src_imgs( 12, NULL );
 
 //float focal_length = UWV_FOCAL_LEN_DFLT;
 
@@ -64,17 +64,21 @@ bool flag_single_Stitcher = true;
 
 // add by chromiumikx
 int num_selected_imgs;
-PF_EffectWorld *dest_back_layer; // background image
-std::vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
-std::vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
+vector<float>lapped_ratios(12, UWV_RATIO_DFLT);
+vector<int>frame_shifts(12, UWV_FRAME_SHIFT_DFLT);
 
 
 Mat32f* mat_result_img_ptr;
-Stitcher* h_calc_blender_ptr = NULL; // 全局方式：1. 控制在AE中预览的时候只存在一个Stitcher；2. 在真正render的时候，重新保持另一个Stitcher
-A_long key_frame_calc_h;
-std::vector<Homography> result_homogs; // (12, Homography::I()); 不必写定12个，按需要添加
-std::vector<Homography> result_homogs_invers; // (12, Homography::I());
 
+// data to save
+A_long key_frame_calc_h;
+vector<Homography>* result_homogras; // (12, Homography::I()); 不必写定12个，按需要添加
+
+// params for render
+vector<vector<Coor>>* imgs_ranges_minNmax;
+vector<Vec2D>* final_proj_range_idnt;
+Coor* target_size;
+Vec2D* final_resolution;
 
 
 static PF_Err 
@@ -152,9 +156,21 @@ SequenceSetup(
 
 	mySD_P->frame_calc_h_ptr = new A_long;
 	mySD_P->flag_h_clac_for_render_ptr = new A_Boolean;
+	mySD_P->homogs_ptr = new vector<Homography>;
+	mySD_P->num_H = new A_long;
+	mySD_P->imgs_ranges_minNmax_ptr = new vector<vector<Coor>>;
+	mySD_P->final_proj_range_idnt_ptr = new vector<Vec2D>;
+	mySD_P->target_size_ptr = new Coor;
+	mySD_P->final_resolution_ptr = new Vec2D;
 	
 	*(mySD_P->frame_calc_h_ptr) = 0;
 	*(mySD_P->flag_h_clac_for_render_ptr) = false;
+	*(mySD_P->num_H) = 0;
+
+	mySD_P->target_size_ptr->x = 0;
+	mySD_P->target_size_ptr->y = 0;
+	mySD_P->final_resolution_ptr->x = 0;
+	mySD_P->final_resolution_ptr->y = 0;
 
 	return PF_Err_NONE;
 }
@@ -170,6 +186,13 @@ SequenceSetdown(
 		mySequenceData *mySD_P = *(mySequenceData**)out_data->sequence_data;
 		delete mySD_P->frame_calc_h_ptr;
 		delete mySD_P->flag_h_clac_for_render_ptr;
+		delete mySD_P->homogs_ptr;
+		delete mySD_P->num_H;
+		delete mySD_P->imgs_ranges_minNmax_ptr;
+		delete mySD_P->final_proj_range_idnt_ptr;
+		delete mySD_P->target_size_ptr;
+		delete mySD_P->final_resolution_ptr;
+
 		PF_DISPOSE_HANDLE(in_data->sequence_data);
 		out_data->sequence_data = NULL;
 	}
@@ -198,6 +221,47 @@ SequenceFlatten(
 					AEFX_CLR_STRUCT(*flatSD_P);
 					flatSD_P->flat_frame_calc_h = *(mySD_P->frame_calc_h_ptr);
 					flatSD_P->flat_flag_h_clac_for_render = *(mySD_P->flag_h_clac_for_render_ptr);
+					flatSD_P->flat_num_H = *(mySD_P->num_H);
+					flatSD_P->flat_target_size.data[0] = mySD_P->target_size_ptr->x;
+					flatSD_P->flat_target_size.data[1] = mySD_P->target_size_ptr->y;
+					flatSD_P->flat_final_resolution.data[0] = mySD_P->final_resolution_ptr->x;
+					flatSD_P->flat_final_resolution.data[1] = mySD_P->final_resolution_ptr->y;
+					
+					int cntr_vec = 0;
+					for (auto &i_homo : *(mySD_P->homogs_ptr))
+					{
+						data_H data_H;
+						for (int i=0; i < 9; i++) 
+						{
+							data_H.data[i] = i_homo.data[i];
+						}
+						flatSD_P->flat_homogs[cntr_vec] = data_H;
+						cntr_vec = cntr_vec + 1;
+					}
+
+					cntr_vec = 0;
+					for(auto& i_img_ranges: *(mySD_P->imgs_ranges_minNmax_ptr))
+					{
+						data_Vec2D data_Vec2D_min;
+						data_Vec2D data_Vec2D_max;
+						data_Vec2D_min.data[0] = i_img_ranges[0].x;
+						data_Vec2D_min.data[1] = i_img_ranges[0].y;
+						data_Vec2D_max.data[0] = i_img_ranges[1].x;
+						data_Vec2D_max.data[1] = i_img_ranges[1].y;
+						flatSD_P->flat_imgs_ranges_minNmax[cntr_vec][0] = data_Vec2D_min;
+						flatSD_P->flat_imgs_ranges_minNmax[cntr_vec][1] = data_Vec2D_max;
+						cntr_vec = cntr_vec + 1;
+					}					
+					
+				    cntr_vec = 0;
+					for(auto& final_range: *(mySD_P->final_proj_range_idnt_ptr))
+					{
+						data_Vec2D data_Vec2D;
+						data_Vec2D.data[0] = final_range.x;
+						data_Vec2D.data[1] = final_range.y;
+						flatSD_P->flat_final_proj_range_idnt[cntr_vec] = data_Vec2D;
+						cntr_vec = cntr_vec + 1;
+					}
 
 					suites.HandleSuite1()->host_dispose_handle(in_data->sequence_data);
 					out_data->sequence_data = flat_seq_dataH;
@@ -245,9 +309,41 @@ SequenceResetup(
 					AEFX_CLR_STRUCT(*mySD_P);
 					mySD_P->frame_calc_h_ptr = new A_long;
 					mySD_P->flag_h_clac_for_render_ptr = new A_Boolean;
-
+					mySD_P->homogs_ptr = new vector<Homography>;
+					mySD_P->num_H = new A_long;
+					mySD_P->imgs_ranges_minNmax_ptr = new vector<vector<Coor>>;
+					mySD_P->final_proj_range_idnt_ptr = new vector<Vec2D>;
+					mySD_P->target_size_ptr = new Coor;
+					mySD_P->final_resolution_ptr = new Vec2D;
+		
 					*(mySD_P->frame_calc_h_ptr) = flatSD_P->flat_frame_calc_h;
 					*(mySD_P->flag_h_clac_for_render_ptr) = flatSD_P->flat_flag_h_clac_for_render;
+					*(mySD_P->num_H) = flatSD_P->flat_num_H;
+					mySD_P->target_size_ptr->x = int(flatSD_P->flat_target_size.data[0]);
+					mySD_P->target_size_ptr->y = int(flatSD_P->flat_target_size.data[1]);
+					mySD_P->final_resolution_ptr->x = flatSD_P->flat_final_resolution.data[0];
+					mySD_P->final_resolution_ptr->y = flatSD_P->flat_final_resolution.data[1];
+					
+					for (int j = 0; j < *(mySD_P->num_H); j++)
+					{
+						Homography* tmp_homog = new Homography(flatSD_P->flat_homogs[j].data);
+						mySD_P->homogs_ptr->emplace_back(*tmp_homog);
+						delete tmp_homog;
+
+						Coor img_range_min{ int((flatSD_P->flat_imgs_ranges_minNmax)[j][0].data[0]) ,int((flatSD_P->flat_imgs_ranges_minNmax)[j][0].data[1]) },
+							img_range_max{ int((flatSD_P->flat_imgs_ranges_minNmax)[j][1].data[0]) ,int((flatSD_P->flat_imgs_ranges_minNmax)[j][1].data[1]) };
+						vector<Coor>* minNmax = new vector<Coor>;
+						minNmax->emplace_back(img_range_min);
+						minNmax->emplace_back(img_range_max);
+						mySD_P->imgs_ranges_minNmax_ptr->emplace_back(*minNmax);
+						delete minNmax; minNmax = NULL;
+
+						Vec2D final_range_min{ flatSD_P->flat_final_proj_range_idnt[0].data[0], flatSD_P->flat_final_proj_range_idnt[0].data[1] };
+						Vec2D final_range_max{ flatSD_P->flat_final_proj_range_idnt[1].data[0], flatSD_P->flat_final_proj_range_idnt[1].data[1] };
+						mySD_P->final_proj_range_idnt_ptr->emplace_back(final_range_min);
+						mySD_P->final_proj_range_idnt_ptr->emplace_back(final_range_max);
+
+					}
 
 					out_data->sequence_data = unflat_seq_dataH;
 					suites.HandleSuite1()->host_unlock_handle(unflat_seq_dataH);
@@ -691,6 +787,7 @@ GetSrcImgs(PF_InData		*in_data,
 			&checkout);
 		if (((&checkout.u.ld)->width != 0) && ((&checkout.u.ld)->width != output->width)) { // 判断当前IMPORT的不是空图片也不是纯色图层（宽度为输出的宽度）
 			ERR(wsP->PF_GetPixelFormat((&checkout.u.ld), &format));
+			if (src_imgs[i]) { delete src_imgs[i]; src_imgs[i] = NULL; }
 			src_imgs[i] = new  PF_EffectWorld;
 			ERR(wsP->PF_NewWorld(in_data->effect_ref, (&checkout.u.ld)->width, (&checkout.u.ld)->height, 1, format, (src_imgs[i])));
 			PF_COPY(&checkout.u.ld,
@@ -707,10 +804,9 @@ GetSrcImgs(PF_InData		*in_data,
 	return PF_Err_NONE;
 }
 
-static PF_Err
-CropImg()
+Mat32f CropImg(Mat32f & input_img)
 {
-	;
+	return crop(input_img);
 }
 
 void OutputDebugPrintf(const char * strOutputString, ...)
@@ -799,73 +895,76 @@ Render (
 	if (num_selected_imgs && !flag_check_render) {
 		out_data->width = (in_data->width) / 4; // ??
 		out_data->height = (in_data->height) / 4; // ??
-		mesh_width = (output->width) / num_selected_imgs; // 拼接的view的数目
-		mesh_height_1 = ((output->height - (src_height*mesh_width) / (src_width))) >> 1;
+		mesh_width_1 = (output->width) / num_selected_imgs; // 拼接的view的数目
+		mesh_height_1 = ((output->height - (src_height*mesh_width_1) / (src_width))) >> 1;
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format));
 		PF_EffectWorld* ew_selected_view = new  PF_EffectWorld;
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, output->width, output->height, 1, format, (ew_selected_view)));
 		PF_COPY(output, ew_selected_view, NULL, NULL);
 		for (i = 0; i < num_selected_imgs; i++) {
 			if (src_imgs[i] != NULL) {
-				destArea = { i*mesh_width, mesh_height_1, (i + 1)*mesh_width, output->height - mesh_height_1 };
+				destArea = { i*mesh_width_1, mesh_height_1, (i + 1)*mesh_width_1, output->height - mesh_height_1 };
 				PF_COPY(src_imgs[i], ew_selected_view, NULL, &destArea);
 			}
 		}
 		// show current imported views
 		PF_COPY(ew_selected_view, output, NULL, NULL);
 		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_selected_view));
-		if (ew_selected_view) delete ew_selected_view;
+		if (ew_selected_view) { delete ew_selected_view; ew_selected_view = NULL; }
 	}
 
 
 
 	// 宏函数，生成Stitcher，渲染
-	#define CALC_AND_BLEND \
+#define CALC_HOMOGS \
 		if (flag_single_Stitcher) \
 		{ \
 			flag_single_Stitcher = false; \
 			num_selected_imgs = 0; \
 			vector<PF_EffectWorld *>key_src_imgs(12, NULL); \
 			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr)); \
+            *(mySD_P->num_H) = num_selected_imgs; \
 			vector<Mat32f> key_mat_imgs; \
 			for (i = 0; i < num_selected_imgs; i++) { \
 				key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3); \
 				ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i]))); \
 			} \
-			if (h_calc_blender_ptr) delete h_calc_blender_ptr; \
-			h_calc_blender_ptr = new Stitcher(move(key_mat_imgs)); \
-			h_calc_blender_ptr->only_build_homog(); \
-			h_calc_blender_ptr->return_homogs(result_homogs, result_homogs_invers); \
-		} \
-		if (h_calc_blender_ptr) \
-		{ \
-			h_calc_blender_ptr->change_imgsref(mat_imgs); \
-			*mat_result_img_ptr = h_calc_blender_ptr->only_render(); \
-		} \
-		Mat32f* tmp_mat_result_img_ptr; \
-		tmp_mat_result_img_ptr = new Mat32f(blendingCPU(mat_imgs, result_homogs)); \
-		if (tmp_mat_result_img_ptr) delete tmp_mat_result_img_ptr; \
+			Stitcher stitcher_ptr(move(key_mat_imgs)); \
+			stitcher_ptr.only_clac_homogras(); \
+			if (result_homogras) delete result_homogras; \
+			result_homogras = NULL; \
+			result_homogras = new vector<Homography>; \
+			stitcher_ptr.return_homogras(*result_homogras); \
+			if (mySD_P->homogs_ptr) delete mySD_P->homogs_ptr; \
+			mySD_P->homogs_ptr = NULL; \
+			mySD_P->homogs_ptr = new vector<Homography>; \
+			for (auto &i_homo : *result_homogras) \
+			{ \
+				mySD_P->homogs_ptr->emplace_back(i_homo); \
+			} \
+		} 
+
+#define BLEND_RESULT *mat_result_img_ptr = blend_YW_ver(mat_imgs, *(mySD_P->homogs_ptr))
+
+#define SHOW_RESULT \
 		ERR(wsP->PF_GetPixelFormat((src_imgs[0]), &format)); \
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, (*mat_result_img_ptr).width(), (*mat_result_img_ptr).height(), 1, format, (ew_result_img))); \
 		ERR(MatToEw(in_data, mat_result_img_ptr, ew_result_img)); \
-		A_long top_edge; \
-		A_long bottom_edge; \
-		A_long left_edge; \
-		A_long right_edge; \
 		if ((ew_result_img->width) / (ew_result_img->height) < (output->width) / (output->height)) \
 		{ \
-			top_edge = 0; \
-			bottom_edge = output->height; \
-			left_edge = ((output->width - (output->height*ew_result_img->width) / ew_result_img->height) >> 1); \
-			right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1); \
+			A_long top_edge = 0; \
+			A_long bottom_edge = output->height; \
+			A_long left_edge = ((output->width - (output->height*ew_result_img->width) / ew_result_img->height) >> 1); \
+			A_long right_edge = ((output->width + (output->height*ew_result_img->width) / ew_result_img->height) >> 1); \
+            destArea = { left_edge, top_edge, right_edge, bottom_edge }; \
 		} \
 		else { \
-			left_edge = 0; \
-			right_edge = output->width; \
-			top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1); \
-			bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1); \
+			A_long left_edge = 0; \
+			A_long right_edge = output->width; \
+			A_long top_edge = ((output->height - (output->width*ew_result_img->height) / ew_result_img->width) >> 1); \
+			A_long bottom_edge = ((output->height + (output->width*ew_result_img->height) / ew_result_img->width) >> 1); \
+            destArea = { left_edge, top_edge, right_edge, bottom_edge }; \
 		} \
-		destArea = { left_edge, top_edge, right_edge, bottom_edge }; \
 		PF_EffectWorld* zeros_output = new PF_EffectWorld; \
 		ERR(wsP->PF_NewWorld(in_data->effect_ref, 3, 3, 1, format, zeros_output)); \
 		PF_Pixel8 *pixelP = NULL; \
@@ -881,6 +980,7 @@ Render (
 		} \
 		PF_COPY(zeros_output, output, NULL, NULL); \
 		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, zeros_output)); \
+        if (zeros_output) { delete zeros_output; zeros_output = NULL; } \
 		PF_COPY(ew_result_img, output, NULL, &destArea); \
 		ERR(wsP->PF_DisposeWorld(in_data->effect_ref, ew_result_img))
 
@@ -903,7 +1003,81 @@ Render (
 		// 缩放、填充区域计算
 		// 输出output前，用全黑3*3矩阵覆盖output
 		// 读写mat32f时，注意对应mat32f的格式
-		CALC_AND_BLEND;
+		
+		// calc and get render params
+		if (flag_single_Stitcher) 
+		{ 
+			flag_single_Stitcher = false; 
+			num_selected_imgs = 0; 
+			vector<PF_EffectWorld *>key_src_imgs(12, NULL); 
+			GetSrcImgs(in_data, out_data, params, output, key_src_imgs, num_selected_imgs, format, *(mySD_P->frame_calc_h_ptr)); 
+			*(mySD_P->num_H) = num_selected_imgs; 
+			vector<Mat32f> key_mat_imgs; 
+			for (i = 0; i < num_selected_imgs; i++) {
+					key_mat_imgs.emplace_back(key_src_imgs[0]->height, key_src_imgs[0]->width, 3); 
+					ERR(EwToMat(in_data, (key_src_imgs[i]), (key_mat_imgs[i]))); 
+			} 
+			Stitcher stitcher_ptr(move(key_mat_imgs)); 
+			stitcher_ptr.only_clac_homogras(); 
+			if (result_homogras) delete result_homogras; 
+			result_homogras = NULL; 
+			result_homogras = new vector<Homography>; 
+			stitcher_ptr.return_homogras(*result_homogras); 
+			if (mySD_P->homogs_ptr) delete mySD_P->homogs_ptr; 
+			mySD_P->homogs_ptr = NULL; 
+			mySD_P->homogs_ptr = new vector<Homography>; 
+			for (auto &i_homo : *result_homogras) 
+			{ 
+				mySD_P->homogs_ptr->emplace_back(i_homo); 
+			} 
+
+			// return render params
+			if (imgs_ranges_minNmax) { delete imgs_ranges_minNmax; imgs_ranges_minNmax = NULL; }
+			imgs_ranges_minNmax = new vector<vector<Coor>>;
+			if (final_proj_range_idnt) { delete final_proj_range_idnt; final_proj_range_idnt = NULL; }
+			final_proj_range_idnt = new vector<Vec2D>;
+			if (target_size) { delete target_size; target_size = NULL; }
+			target_size = new Coor;
+			if (final_resolution) { delete final_resolution; final_resolution = NULL; }
+			final_resolution = new Vec2D;
+			stitcher_ptr.return_render_params(*imgs_ranges_minNmax, *final_proj_range_idnt, *target_size, *final_resolution);
+			// get and sequence params
+			if (mySD_P->imgs_ranges_minNmax_ptr) delete mySD_P->imgs_ranges_minNmax_ptr;
+			if (mySD_P->final_proj_range_idnt_ptr) delete mySD_P->final_proj_range_idnt_ptr;
+			if (mySD_P->target_size_ptr) delete mySD_P->target_size_ptr;
+			if (mySD_P->final_resolution_ptr) delete mySD_P->final_resolution_ptr;
+			mySD_P->imgs_ranges_minNmax_ptr = NULL; mySD_P->final_proj_range_idnt_ptr = NULL; mySD_P->target_size_ptr = NULL; mySD_P->final_resolution_ptr = NULL;
+			mySD_P->imgs_ranges_minNmax_ptr = new vector<vector<Coor>>;
+			mySD_P->final_proj_range_idnt_ptr = new vector<Vec2D>;
+			mySD_P->target_size_ptr = new Coor;
+			mySD_P->final_resolution_ptr = new Vec2D;
+			*(mySD_P->target_size_ptr) = *target_size;
+			*(mySD_P->final_resolution_ptr) = *final_resolution;
+			auto scale_coor_to_img_coor = [&](Vec2D v) {
+				v = (v - (*final_proj_range_idnt)[0]) / *final_resolution;
+				return Coor(v.x, v.y);
+			};
+			for (auto &i_imgs_ranges : *imgs_ranges_minNmax)
+			{
+				vector<Coor> coor_range_{ i_imgs_ranges[0], i_imgs_ranges[1] };
+				(*mySD_P->imgs_ranges_minNmax_ptr).emplace_back(coor_range_);
+			}
+			(*mySD_P->final_proj_range_idnt_ptr).emplace_back((*final_proj_range_idnt)[0]);
+			(*mySD_P->final_proj_range_idnt_ptr).emplace_back((*final_proj_range_idnt)[1]);
+
+		}
+
+		// blend result
+		//*mat_result_img_ptr = blend_YW_ver(mat_imgs, *(mySD_P->homogs_ptr));
+
+		// TEST blending on CPU seperate from stitcher
+		*mat_result_img_ptr = blendingCPU(mat_imgs, *(mySD_P->homogs_ptr), 
+			*mySD_P->imgs_ranges_minNmax_ptr, 
+			*mySD_P->final_proj_range_idnt_ptr, 
+			*(mySD_P->target_size_ptr), 
+			*(mySD_P->final_resolution_ptr));
+
+		SHOW_RESULT;
 	}
 
 
@@ -912,13 +1086,21 @@ Render (
 	*/
 	if (flag_check_render && (num_selected_imgs > 1))
 	{
-		CALC_AND_BLEND;
+		if (mySD_P->homogs_ptr->empty()) {
+			CALC_HOMOGS;
+		}
+		if (!(mySD_P->homogs_ptr->empty())) 
+		{ 
+			*mat_result_img_ptr = blend_YW_ver(mat_imgs, *(mySD_P->homogs_ptr));
+			SHOW_RESULT;
+		}
+		
 	}
 
 	// 为了表示此次点击是使能flag_calc_homog，最后再置零
 	if (flag_calc_homog) flag_calc_homog = false;
 
-	if (ew_result_img) delete ew_result_img;
+	if (ew_result_img) { delete ew_result_img; ew_result_img = NULL; }
 
 	return err;
 }

@@ -37,10 +37,10 @@ class CylinderStitcher : public StitcherBase {
 					bundle.component[i].imgptr = &imgs[i];
 			}
 
-		virtual void only_build_homog();
+		virtual void only_clac_homogras();
 		virtual void change_imgsref(std::vector<Mat32f>&);
 		Mat32f only_render(); // add a only_render function
-		void return_homogs(std::vector<Homography>&, std::vector<Homography> &);
+		void return_render_params(std::vector<Homography>&, std::vector<Homography> &);
 };
 
 

@@ -59,10 +59,14 @@ class Stitcher : public StitcherBase {
 			}
 
 		virtual Mat32f build();
-		virtual void only_build_homog();
+		virtual void only_clac_homogras();
 		Mat32f only_render();
 		void change_imgsref(std::vector<Mat32f>& mat_imgs);
-		void return_homogs(std::vector<Homography> & result_homogs, std::vector<Homography> & result_homogs_invers);
+		void return_homogras(std::vector<Homography> & result_homogras);
+		void return_render_params(std::vector<std::vector<Coor>> & imgs_ranges_minNmax,
+									std::vector<Vec2D>& final_proj_range_idnt,
+			                        Coor& target_size,
+									Vec2D& final_resolution);
 };
 
 }

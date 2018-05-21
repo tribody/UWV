@@ -1,8 +1,8 @@
-输出目录：$(AE_PLUGIN_BUILD_DIR)\UWV\
+﻿输出目录：$(AE_PLUGIN_BUILD_DIR)\UWV\
 
 调试目录：D:\Adobe\AE\Adobe After Effects CC 2014\Support Files\AfterFX.exe
 
-包含目录D:\opencv\opencv2.4.3\build\include;D:\opencv\opencv2.4.3\build\include\opencv;D:\opencv\opencv2.4.3\build\include\opencv2;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;$(IncludePath)
+包含目录：D:\opencv\opencv2.4.3\build\include;D:\opencv\opencv2.4.3\build\include\opencv;D:\opencv\opencv2.4.3\build\include\opencv2;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;$(IncludePath)
 
 库目录：D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\third-party\jpeg;D:\opencv\opencv2.4.3\build\x64\vc10\lib;D:\Adobe_After_Effects_CC_2014_Win_SDK\Examples\Template\UWV\lib;$(LibraryPath)
 

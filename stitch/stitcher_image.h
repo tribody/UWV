@@ -53,25 +53,25 @@ struct ConnectedImages {
 	// update range of projection of all transformations
 	void update_proj_range();
 
-	homo2proj_t get_homo2proj() const {
+	homo2proj_t get_homogen2proj() const {
 		switch (proj_method) {
 			case ProjectionMethod::flat:
-				return flat::homo2proj;
+				return flat::homogen2proj;
 			case ProjectionMethod::cylindrical:
-				return cylindrical::homo2proj;
+				return cylindrical::homogen2proj;
 			case ProjectionMethod::spherical:
-				return spherical::homo2proj;
+				return spherical::homogen2proj;
 		}
 		assert(false);
 	}
-	proj2homo_t get_proj2homo() const {
+	proj2homo_t get_proj2homogen() const {
 		switch (proj_method) {
 			case ProjectionMethod::flat:
-				return flat::proj2homo;
+				return flat::proj2homogen;
 			case ProjectionMethod::cylindrical:
-				return cylindrical::proj2homo;
+				return cylindrical::proj2homogen;
 			case ProjectionMethod::spherical:
-				return spherical::proj2homo;
+				return spherical::proj2homogen;
 		}
 		assert(false);
 	}

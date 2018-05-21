@@ -16,11 +16,17 @@ namespace pano {
 			int _width, _height;
 
 			void load() {
-				if (img) return;
-				/* 此处修改stitcher */
-				img = new Mat32f{ fname_2_mat32f };
-				_width = img->width();
-				_height = img->height();
+				if (img) {
+					_width = img->width();
+					_height = img->height();
+				}
+				else {
+					/* 此处修改stitcher */
+					img = new Mat32f{ fname_2_mat32f };
+					_width = img->width();
+					_height = img->height();
+				}
+				return;
 			}
 			void change_oneimgref(const Mat32f& mat_insert) {
 				release(); // release former img before change ref

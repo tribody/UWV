@@ -57,8 +57,8 @@ class Homography {
 
 		inline Vec2D trans_normalize(const Vec& m) const {
 			Vec ret = trans(m);
-			double denom = 1.0 / ret.z;
-			return Vec2D(ret.x * denom, ret.y * denom);
+			double denorm = 1.0 / ret.z;
+			return Vec2D(ret.x * denorm, ret.y * denorm);
 		}
 
 		inline Vec trans(const Vec2D& m) const {
