@@ -144,7 +144,6 @@
     <ClCompile Include="..\..\..\Util\MissingSuiteError.cpp">
       <Filter>Supporting code</Filter>
     </ClCompile>
-    <ClCompile Include="..\UWV.cpp" />
     <ClCompile Include="..\UWV_Strings.cpp" />
     <ClCompile Include="..\stitch\blender.cpp">
       <Filter>Supporting code</Filter>
@@ -253,6 +252,7 @@
       <Filter>Supporting code</Filter>
     </ClCompile>
     <ClCompile Include="..\blending_ver2.cpp" />
+    <ClCompile Include="..\UWV.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\UWVPiPL.r">
